@@ -1,4 +1,4 @@
-name: Stock Price Monitor
+name: Stock Price & Volatility Monitor
 
 on:
   schedule:
@@ -10,7 +10,7 @@ jobs:
   check-stocks:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Allows committing file updates back to repo
+      contents: write
 
     steps:
       - name: Checkout Repository
@@ -25,10 +25,21 @@ jobs:
         run: |
           pip install requests yfinance
 
-      - name: Run Stock Check
+      - name: Run Heartbeat (Once at Market Open)
+        if: github.event.schedule == '0 13 * * 1-5' || github.event_name == 'workflow_dispatch'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python heartbeat.py
+
+      - name: Run Stock Watchlist Check
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: python stock_alert.py
+
+      - name: Run VIX Volatility Check
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python vix_alert.py
 
       - name: Commit Updated Watchlist back to GitHub
         run: |
