@@ -8,7 +8,6 @@ import yfinance as yf
 
 WEBHOOK_URL = os.environ.get("DISCORD_PORTFOLIO_WEBHOOK")
 
-# Dynamic path to target Marks_portfolio.json within the same folder
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PORTFOLIO_FILE = os.path.join(BASE_DIR, "Marks_portfolio.json")
 
@@ -57,14 +56,35 @@ def generate_pie_chart(results, total_profit):
     plt.title(f'Portfolio Allocation\nNet P/L: ${total_profit:,.2f}', fontsize=14, fontweight='bold')
     plt.tight_layout()
     
-    chart_path = "portfolio_chart.png"
+    chart_path = os.path.join(BASE_DIR, "portfolio_chart.png")
     plt.savefig(chart_path, dpi=200)
     plt.close()
     return chart_path
 
+def post_status_summary():
+    """Generates the pie chart and sends current portfolio state to Discord."""
+    portfolio = load_portfolio()
+    results, total_val, total_profit = fetch_portfolio_values(portfolio)
+    chart_file = generate_pie_chart(results, total_profit)
+
+    summary_text = f"**Current Portfolio Value:** ${total_val:,.2f}\n**Total Net Profit/Loss:** ${total_profit:,.2f}"
+
+    if WEBHOOK_URL:
+        payload = {
+            "username": "Marks Portfolio",
+            "embeds": [{
+                "title": "📊 MARKS PORTFOLIO: CURRENT OVERVIEW",
+                "description": summary_text,
+                "color": 3447003, # Blue / Neutral
+                "image": {"url": "attachment://portfolio_chart.png"}
+            }]
+        }
+        with open(chart_file, "rb") as f:
+            requests.post(WEBHOOK_URL, data={"payload_json": json.dumps(payload)}, files={"file": (chart_file, f, "image/png")})
+        print("Portfolio status reminder posted to Discord successfully.")
+
 def execute_trade(action, ticker, shares_change, price):
     portfolio = load_portfolio()
-    results_before, total_val_before, _ = fetch_portfolio_values(portfolio)
 
     old_shares, old_buy = portfolio.get(ticker, [0, 0.0])
     
@@ -104,13 +124,16 @@ def execute_trade(action, ticker, shares_change, price):
         print("Trade alert and pie chart posted to Discord successfully.")
 
 if __name__ == "__main__":
-    if len(sys.argv) < 5:
-        print("Usage: python portfolio_update.py BUY TICKER SHARES PRICE")
+    if len(sys.argv) > 1 and sys.argv[1].upper() in ["STATUS", "SUMMARY"]:
+        post_status_summary()
+    elif len(sys.argv) >= 5:
+        trade_action = sys.argv[1].upper()
+        trade_ticker = sys.argv[2].upper()
+        trade_shares = int(sys.argv[3])
+        trade_price = float(sys.argv[4])
+        execute_trade(trade_action, trade_ticker, trade_shares, trade_price)
+    else:
+        print("Usage:")
+        print("  Status check: python portfolio/Marks_portfolio_updates.py STATUS")
+        print("  Trade execute: python portfolio/Marks_portfolio_updates.py BUY TICKER SHARES PRICE")
         sys.exit(1)
-
-    trade_action = sys.argv[1].upper()
-    trade_ticker = sys.argv[2].upper()
-    trade_shares = int(sys.argv[3])
-    trade_price = float(sys.argv[4])
-
-    execute_trade(trade_action, trade_ticker, trade_shares, trade_price)
