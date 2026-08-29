@@ -35,7 +35,7 @@ To log a trade and automatically send an updated donut allocation chart to Disco
 
 ```bash
 # Command format:
-python portfolio/portfolio_update.py [ACTION] [TICKER] [SHARES] [PRICE]
+python portfolio/Marks_portfolio_updates.py [ACTION] [TICKER] [SHARES] [PRICE]
 
 # Examples:
 python portfolio/Marks_portfolio_updates.py BUY APP 5 300.00
