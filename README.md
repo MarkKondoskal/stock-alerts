@@ -38,6 +38,6 @@ To log a trade and automatically send an updated donut allocation chart to Disco
 python portfolio/portfolio_update.py [ACTION] [TICKER] [SHARES] [PRICE]
 
 # Examples:
-python portfolio/portfolio_update.py BUY APP 5 300.00
-python portfolio/portfolio_update.py BUY AMZN 10 180.50
-python portfolio/portfolio_update.py SELL META 2 525.00
+python portfolio/Marks_portfolio_updates.py BUY APP 5 300.00
+python portfolio/Marks_portfolio_updates.py BUY AMZN 10 180.50
+python portfolio/Marks_portfolio_updates.py SELL META 2 525.00
