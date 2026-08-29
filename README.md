@@ -26,41 +26,6 @@ Monitors overall market health and risk sentiment, posting alerts directly to Di
 
 ---
 
-## 📂 Repository Structure
-
-```text
-stock-alerts/
-│
-├── .github/
-│   └── workflows/
-│       ├── stock_checker.yml        # Automated stock target & sentiment checker
-│       └── portfolio_summary.yml    # Web-interactive portfolio management GUI
-│
-├── portfolio/
-│   ├── marks_portfolio.json         # Live position holdings and buy prices
-│   └── marks_portfolio_update.py    # Portfolio manager & pie chart generator
-│
-├── alerts/
-│   ├── watchlist.json               # Stock price targets
-│   ├── stock_alert.py               # Stock target checker
-│   ├── sentiment_alert.py           # CNN Fear & Greed + VIX monitor
-│   └── heartbeat.py                 # Status heartbeat monitor
-│
-└── README.md
-```
-
----
-
-## ⚙️ Environment Secrets
-
-Required GitHub Repository Secrets (`Settings` → `Secrets and variables` → `Actions`):
-
-* `DISCORD_STOCK_WEBHOOK` — Stock price target alert channel
-* `DISCORD_SENTIMENT_WEBHOOK` — Market sentiment & VIX alert channel
-* `DISCORD_PORTFOLIO_WEBHOOK` — Marks Portfolio updates channel
-
----
-
 ## 🛠️ Portfolio Management Guide (GitHub Web GUI)
 
 All portfolio holdings and buy prices are stored inside `portfolio/marks_portfolio.json`. You can manage your entire portfolio and push live updates directly from **GitHub.com** without running local terminal commands.
@@ -96,19 +61,38 @@ All portfolio holdings and buy prices are stored inside `portfolio/marks_portfol
 
 ---
 
-## 💻 Local Terminal Execution (Optional)
+## ⚙️ Environment Secrets
 
-If running locally from your terminal, execute:
+Required GitHub Repository Secrets (`Settings` → `Secrets and variables` → `Actions`):
 
-```bash
-# Command format:
-python portfolio/marks_portfolio_update.py [ACTION] [TICKER] [SHARES] [PRICE]
+* `DISCORD_STOCK_WEBHOOK` — Stock price target alert channel
+* `DISCORD_SENTIMENT_WEBHOOK` — Market sentiment & VIX alert channel
+* `DISCORD_PORTFOLIO_WEBHOOK` — Marks Portfolio updates channel
 
-# Examples:
-python portfolio/marks_portfolio_update.py BUY APP 5 300.00
-python portfolio/marks_portfolio_update.py BUY AMZN 10 180.50
-python portfolio/marks_portfolio_update.py SELL META 2 525.00
+---
 
-# Send a status summary reminder:
-python portfolio/marks_portfolio_update.py STATUS
+## 📂 Repository Structure
+
+```text
+stock-alerts/
+│
+├── .github/
+│   └── workflows/
+│       ├── stock_checker.yml        # Automated stock target & sentiment checker
+│       └── portfolio_summary.yml    # Web-interactive portfolio management GUI
+│
+├── portfolio/
+│   ├── marks_portfolio.json         # Live position holdings and buy prices
+│   └── marks_portfolio_update.py    # Portfolio manager & pie chart generator
+│
+├── alerts/
+│   ├── watchlist.json               # Stock price targets
+│   ├── stock_alert.py               # Stock target checker
+│   ├── sentiment_alert.py           # CNN Fear & Greed + VIX monitor
+│   └── heartbeat.py                 # Status heartbeat monitor
+│
+└── README.md
 ```
+
+
+
