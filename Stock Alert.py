@@ -1,4 +1,5 @@
 import os
+import json
 import time
 import warnings
 import requests
@@ -8,27 +9,16 @@ import yfinance as yf
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", message=".*utcnow.*")
 
-# Fetch Webhook URL from GitHub Environment Secrets
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
-WATCHLIST = {
-    "RDW": [8.0],
-    "APP": [300.0],
-    "GOOG": [300.0],
-    "AMKR": [42.0, 38.5],
-    "CRDO": [140.0],
-    "IREN": [28.5],
-    "NBIS": [170.0],
-    "SNPS": [380.0],
-    "VOYG": [30.0],
-    "KEEL": [3.0, 2.5],
-    "CRWV": [65.0],
-    "ASTS": [55.0],
-    "APLD": [22.0],
-    "META": [525.0],
-    "ZETA": [25.0],
-    "PGY": [18.0],
-}
+def load_watchlist(filepath="watchlist.json"):
+    """Load stock targets dynamically from a JSON file."""
+    try:
+        with open(filepath, "r") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading {filepath}: {e}")
+        return {}
 
 def send_discord_alert(symbol, current_price, target_price):
     if not DISCORD_WEBHOOK_URL:
@@ -56,10 +46,15 @@ def send_discord_alert(symbol, current_price, target_price):
         print(f"Failed to send alert: {response.status_code}, {response.text}")
 
 def check_prices():
-    tickers_str = " ".join(WATCHLIST.keys())
+    watchlist = load_watchlist()
+    if not watchlist:
+        print("No tickers found in watchlist.")
+        return
+
+    tickers_str = " ".join(watchlist.keys())
     data = yf.Tickers(tickers_str)
     
-    for symbol, targets in WATCHLIST.items():
+    for symbol, targets in watchlist.items():
         try:
             price = data.tickers[symbol].fast_info['lastPrice']
             if price is None:
