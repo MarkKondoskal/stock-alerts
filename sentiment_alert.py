@@ -3,7 +3,6 @@ import time
 import warnings
 import requests
 import yfinance as yf
-import fear_greed
 
 # Suppress internal pandas/yfinance warnings
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -36,24 +35,25 @@ def send_discord_sentiment_alert(title, fields, color):
     response = requests.post(DISCORD_SENTIMENT_WEBHOOK, json=payload)
     if response.status_code not in [200, 204]:
         print(f"Failed to send sentiment alert: {response.status_code}, {response.text}")
+    else:
+        print("Market Sentiment alert sent successfully.")
 
 def check_vix():
-    """Checks if today's VIX range touched any of the key levels."""
+    """Checks if today's VIX range touched any key levels."""
     try:
         vix = yf.Ticker("^VIX")
         info = vix.fast_info
 
-        current_val = info.get("lastPrice")
-        day_high = info.get("dayHigh")
-        day_low = info.get("dayLow")
+        current_val = getattr(info, 'last_price', None) or getattr(info, 'lastPrice', None)
+        day_high = getattr(info, 'day_high', None) or getattr(info, 'dayHigh', None)
+        day_low = getattr(info, 'day_low', None) or getattr(info, 'dayLow', None)
 
         if None in (current_val, day_high, day_low):
-            print("Error: Unable to retrieve complete VIX data.")
+            print("VIX Check -> Data currently unavailable (Market closed).")
             return
 
         print(f"VIX Check -> Last: {current_val:.2f} | Low: {day_low:.2f} | High: {day_high:.2f}")
 
-        # Trigger if any key level lies within today's low-high trading range
         for level in VIX_KEY_LEVELS:
             if day_low <= level <= day_high:
                 print(f"TRIGGER: VIX level {level:.1f} breached today!")
@@ -71,15 +71,24 @@ def check_vix():
         print(f"Error checking VIX: {e}")
 
 def check_fear_and_greed():
-    """Checks if CNN Fear & Greed index is in Extreme Fear (<= 25) or Extreme Greed (>= 75)."""
+    """Queries CNN Fear & Greed endpoint directly."""
     try:
-        data = fear_greed.get()
-        score = data["score"]
-        rating = data["rating"].lower()
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        }
+        url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+        res = requests.get(url, headers=headers, timeout=10)
+        
+        if res.status_code != 200:
+            print(f"Fear & Greed fetch failed with status {res.status_code}")
+            return
+
+        data = res.json()
+        score = float(data["fear_and_greed"]["score"])
+        rating = str(data["fear_and_greed"]["rating"]).lower()
 
         print(f"Fear & Greed Check -> Score: {score:.1f} | Rating: {rating}")
 
-        # Threshold Gate: Alert ONLY on Extreme Fear (<= 25) or Extreme Greed (>= 75)
         if score <= 25 or "extreme fear" in rating:
             print("TRIGGER: CNN Fear & Greed in Extreme Fear territory!")
             fields = [
@@ -103,7 +112,7 @@ def check_fear_and_greed():
                 color=3066993 # Green
             )
         else:
-            print("OK: Fear & Greed score is within normal parameters (No alert sent).")
+            print("OK: Fear & Greed is in normal territory (No alert sent).")
 
     except Exception as e:
         print(f"Error checking Fear & Greed Index: {e}")
