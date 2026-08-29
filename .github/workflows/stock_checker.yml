@@ -1,47 +1,41 @@
-name: Stock Price & Volatility Monitor
+name: Stock & Sentiment Alert Pipeline
 
 on:
   schedule:
-    # Runs every 15 minutes during US market hours (Mon-Fri)
+    # Runs every 15 minutes during US trading hours (Mon-Fri)
     - cron: '*/15 13-21 * * 1-5'
   workflow_dispatch:
 
 jobs:
-  check-stocks:
+  run-alert-monitors:
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout Repo
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install Dependencies
         run: |
-          pip install requests yfinance
+          pip install requests yfinance fear-greed
 
-      - name: Run Heartbeat (Once at Market Open)
-        if: github.event.schedule == '0 13 * * 1-5' || github.event_name == 'workflow_dispatch'
+      - name: Run Stock Alerter Script
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: python heartbeat.py
-
-      - name: Run Stock Watchlist Check
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_STOCK_WEBHOOK }}
         run: python stock_alert.py
 
-      - name: Run VIX Volatility Check
+      - name: Run Market Sentiment Script
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: python vix_alert.py
+          DISCORD_SENTIMENT_WEBHOOK: ${{ secrets.DISCORD_SENTIMENT_WEBHOOK }}
+        run: python sentiment_alert.py
 
-      - name: Commit Updated Watchlist back to GitHub
+      - name: Commit Watchlist Updates Back to GitHub
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
