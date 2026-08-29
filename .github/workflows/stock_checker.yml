@@ -25,16 +25,21 @@ jobs:
         run: |
           pip install requests yfinance fear-greed
 
+      # --- 1. STOCK ALERTER STEP ---
+      # Connects DISCORD_STOCK_WEBHOOK secret specifically to stock_alert.py
       - name: Run Stock Alerter Script
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_STOCK_WEBHOOK }}
         run: python stock_alert.py
 
+      # --- 2. MARKET SENTIMENT STEP ---
+      # Connects DISCORD_SENTIMENT_WEBHOOK secret specifically to sentiment_alert.py
       - name: Run Market Sentiment Script
         env:
           DISCORD_SENTIMENT_WEBHOOK: ${{ secrets.DISCORD_SENTIMENT_WEBHOOK }}
         run: python sentiment_alert.py
 
+      # --- 3. AUTO-COMMIT WATCHLIST UPDATES ---
       - name: Commit Watchlist Updates Back to GitHub
         run: |
           git config --global user.name "github-actions[bot]"
