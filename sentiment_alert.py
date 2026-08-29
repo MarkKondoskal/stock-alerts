@@ -89,16 +89,17 @@ def check_fear_and_greed():
 
         print(f"Fear & Greed Check -> Score: {score:.1f} | Rating: {rating}")
 
-        if score <= 25 or "extreme fear" in rating:
-            print("TRIGGER: CNN Fear & Greed in Extreme Fear territory!")
+        # CHANGE THIS LINE FOR TESTING:
+        if True:  # Temporarily force the alert to fire
+            print("TRIGGER: CNN Fear & Greed test alert!")
             fields = [
                 {"name": "Fear & Greed Index", "value": f"**{score:.1f}**", "inline": True},
-                {"name": "Sentiment State", "value": "CRITICAL EXTREME FEAR", "inline": True},
+                {"name": "Sentiment State", "value": f"TEST ALERT ({rating.upper()})", "inline": True},
             ]
             send_discord_sentiment_alert(
-                title="🚨 MARKET SENTIMENT: EXTREME FEAR",
+                title="🚨 MARKET SENTIMENT: TEST ALERT",
                 fields=fields,
-                color=15158332 # Red
+                color=15158332
             )
         elif score >= 75 or "extreme greed" in rating:
             print("TRIGGER: CNN Fear & Greed in Extreme Greed territory!")
