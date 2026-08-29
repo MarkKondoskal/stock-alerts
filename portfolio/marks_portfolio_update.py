@@ -9,7 +9,7 @@ import yfinance as yf
 WEBHOOK_URL = os.environ.get("DISCORD_PORTFOLIO_WEBHOOK")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PORTFOLIO_FILE = os.path.join(BASE_DIR, "Marks_portfolio.json")
+PORTFOLIO_FILE = os.path.join(BASE_DIR, "marks_portfolio.json")
 
 def load_portfolio():
     with open(PORTFOLIO_FILE, "r") as f:
