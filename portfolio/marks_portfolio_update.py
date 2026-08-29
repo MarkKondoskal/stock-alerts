@@ -8,6 +8,7 @@ import yfinance as yf
 
 WEBHOOK_URL = os.environ.get("DISCORD_PORTFOLIO_WEBHOOK")
 
+# Dynamic directory path targeting marks_portfolio.json
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PORTFOLIO_FILE = os.path.join(BASE_DIR, "marks_portfolio.json")
 
@@ -62,7 +63,6 @@ def generate_pie_chart(results, total_profit):
     return chart_path
 
 def post_status_summary():
-    """Generates the pie chart and sends current portfolio state to Discord."""
     portfolio = load_portfolio()
     results, total_val, total_profit = fetch_portfolio_values(portfolio)
     chart_file = generate_pie_chart(results, total_profit)
@@ -75,7 +75,7 @@ def post_status_summary():
             "embeds": [{
                 "title": "📊 MARKS PORTFOLIO: CURRENT OVERVIEW",
                 "description": summary_text,
-                "color": 3447003, # Blue / Neutral
+                "color": 3447003,
                 "image": {"url": "attachment://portfolio_chart.png"}
             }]
         }
@@ -85,7 +85,6 @@ def post_status_summary():
 
 def execute_trade(action, ticker, shares_change, price):
     portfolio = load_portfolio()
-
     old_shares, old_buy = portfolio.get(ticker, [0, 0.0])
     
     if action == "BUY":
@@ -134,6 +133,6 @@ if __name__ == "__main__":
         execute_trade(trade_action, trade_ticker, trade_shares, trade_price)
     else:
         print("Usage:")
-        print("  Status check: python portfolio/Marks_portfolio_updates.py STATUS")
-        print("  Trade execute: python portfolio/Marks_portfolio_updates.py BUY TICKER SHARES PRICE")
+        print("  Status check: python portfolio/marks_portfolio_update.py STATUS")
+        print("  Trade execute: python portfolio/marks_portfolio_update.py BUY TICKER SHARES PRICE")
         sys.exit(1)
