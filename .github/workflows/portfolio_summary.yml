@@ -30,7 +30,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # CRITICAL: This step pulls your files into the runner workspace
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -44,18 +43,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install yfinance matplotlib requests
 
-      # Optional debug step to view your folder layout if pathing fails
-      - name: List Repository Files
-        run: ls -la portfolio/
-
       - name: Execute Portfolio Action
         env:
           DISCORD_PORTFOLIO_WEBHOOK: ${{ secrets.DISCORD_PORTFOLIO_WEBHOOK }}
         run: |
           if [ "${{ github.event.inputs.action }}" = "STATUS" ]; then
-            python portfolio/Marks_portfolio_updates.py STATUS
+            python portfolio/marks_portfolio_update.py STATUS
           else
-            python portfolio/Marks_portfolio_updates.py ${{ github.event.inputs.action }} ${{ github.event.inputs.ticker }} ${{ github.event.inputs.shares }} ${{ github.event.inputs.price }}
+            python portfolio/marks_portfolio_update.py ${{ github.event.inputs.action }} ${{ github.event.inputs.ticker }} ${{ github.event.inputs.shares }} ${{ github.event.inputs.price }}
           fi
 
       - name: Auto-commit Portfolio Changes
@@ -63,4 +58,4 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git diff --quiet || (git add portfolio/Marks_portfolio.json && git commit -m "Update portfolio: ${{ github.event.inputs.action }} ${{ github.event.inputs.ticker }}" && git push)
+          git diff --quiet || (git add portfolio/marks_portfolio.json && git commit -m "Update portfolio: ${{ github.event.inputs.action }} ${{ github.event.inputs.ticker }}" && git push)
