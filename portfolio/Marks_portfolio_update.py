@@ -7,9 +7,10 @@ import matplotlib.pyplot as plt
 import yfinance as yf
 
 WEBHOOK_URL = os.environ.get("DISCORD_PORTFOLIO_WEBHOOK")
-# Absolute path relative to portfolio_update.py location
+
+# Dynamic path to target Marks_portfolio.json within the same folder
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PORTFOLIO_FILE = os.path.join(BASE_DIR, "portfolio.json")
+PORTFOLIO_FILE = os.path.join(BASE_DIR, "Marks_portfolio.json")
 
 def load_portfolio():
     with open(PORTFOLIO_FILE, "r") as f:
