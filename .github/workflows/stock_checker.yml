@@ -29,19 +29,24 @@ jobs:
       # Connects DISCORD_STOCK_WEBHOOK secret specifically to stock_alert.py
       - name: Run Stock Alerter Script
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_STOCK_WEBHOOK }}
-        run: python stock_alert.py
+          DISCORD_STOCK_WEBHOOK: ${{ secrets.DISCORD_STOCK_WEBHOOK }}
+        run: python alerts/stock_alert.py
 
       # --- 2. MARKET SENTIMENT STEP ---
       # Connects DISCORD_SENTIMENT_WEBHOOK secret specifically to sentiment_alert.py
       - name: Run Market Sentiment Script
         env:
           DISCORD_SENTIMENT_WEBHOOK: ${{ secrets.DISCORD_SENTIMENT_WEBHOOK }}
-        run: python sentiment_alert.py
+        run: python alerts/sentiment_alert.py
 
       # --- 3. AUTO-COMMIT WATCHLIST UPDATES ---
-      - name: Commit Watchlist Updates Back to GitHub
+      - name: Run Heartbeat Script
+        run: python alerts/heartbeat.py
+
+      # --- 4. AUTO-COMMIT WATCHLIST UPDATES ---
+      - name: Auto-commit Watchlist Updates
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git diff --quiet || (git add watchlist.json && git commit -m "Auto-removed triggered price targets" && git push)
+          git diff --quiet || (git add alerts/watchlist.json && git commit -m "Auto-removed triggered price targets" && git push)
+          
