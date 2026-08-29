@@ -4,11 +4,13 @@ on:
   schedule:
     # Runs every 15 minutes during US market hours (Mon-Fri)
     - cron: '*/15 13-21 * * 1-5'
-  workflow_dispatch: # Enables manual run button in GitHub UI
+  workflow_dispatch:
 
 jobs:
   check-stocks:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Allows committing file updates back to repo
 
     steps:
       - name: Checkout Repository
@@ -27,3 +29,9 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: python stock_alert.py
+
+      - name: Commit Updated Watchlist back to GitHub
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git diff --quiet || (git add watchlist.json && git commit -m "Auto-removed triggered price targets" && git push)
