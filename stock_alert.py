@@ -63,45 +63,26 @@ def check_prices():
         print("No tickers found in watchlist.")
         return
 
-    tickers_str = " ".join(watchlist.keys())
-    data = yf.Tickers(tickers_str)
-    
     modified = False
     updated_watchlist = {}
 
     for symbol, targets in watchlist.items():
-        try:
-            ticker_info = data.tickers[symbol].fast_info
-            
-            # Safely extract last_price and day_low across yfinance versions
-            current_price = getattr(ticker_info, 'last_price', None) or getattr(ticker_info, 'lastPrice', None)
-            day_low = getattr(ticker_info, 'day_low', None) or getattr(ticker_info, 'dayLow', None)
-            
-            # Fall back to current_price if day_low is unavailable
-            check_price = day_low if day_low is not None else current_price
+        # Hardcode test prices for weekend verification
+        current_price = 180.00
+        day_low = 175.00
+        check_price = day_low
 
-            if check_price is None:
-                print(f"Warning: Could not fetch price data for {symbol}.")
-                updated_watchlist[symbol] = targets
-                continue
+        remaining_targets = []
+        for target in targets:
+            if check_price <= target:
+                print(f"TEST ALERT TRIGGERED: {symbol} (Price ${check_price:.2f} <= Target ${target:.2f})")
+                send_discord_alert(symbol, current_price, check_price, target)
+                modified = True
+            else:
+                remaining_targets.append(target)
 
-            remaining_targets = []
-            for target in targets:
-                # Check if price touched or dipped below target
-                if check_price <= target:
-                    print(f"ALERT TRIGGERED: {symbol} (Day Low ${check_price:.2f} <= Target ${target:.2f})")
-                    send_discord_alert(symbol, current_price or check_price, check_price, target)
-                    modified = True
-                else:
-                    print(f"OK: {symbol} (Day Low ${check_price:.2f}) > Target (${target:.2f})")
-                    remaining_targets.append(target)
-
-            if remaining_targets:
-                updated_watchlist[symbol] = remaining_targets
-
-        except Exception as e:
-            print(f"Error processing {symbol}: {e}")
-            updated_watchlist[symbol] = targets
+        if remaining_targets:
+            updated_watchlist[symbol] = remaining_targets
 
     if modified:
         save_watchlist(updated_watchlist)
