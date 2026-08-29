@@ -8,7 +8,6 @@ import yfinance as yf
 
 WEBHOOK_URL = os.environ.get("DISCORD_PORTFOLIO_WEBHOOK")
 
-# Dynamic directory path targeting marks_portfolio.json
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PORTFOLIO_FILE = os.path.join(BASE_DIR, "marks_portfolio.json")
 
@@ -23,7 +22,6 @@ def save_portfolio(portfolio):
 def fetch_portfolio_values(portfolio):
     results = []
     total_val = 0.0
-    total_cost = 0.0
 
     for ticker, (shares, buy_price) in portfolio.items():
         try:
@@ -37,14 +35,13 @@ def fetch_portfolio_values(portfolio):
             ret_pct = ((val - cost) / cost * 100) if cost > 0 else 0
 
             total_val += val
-            total_cost += cost
             results.append({"ticker": ticker, "value": val, "return_pct": ret_pct})
         except Exception as e:
             print(f"Error fetching {ticker}: {e}")
 
-    return results, total_val, total_val - total_cost
+    return results, total_val
 
-def generate_pie_chart(results, total_profit):
+def generate_pie_chart(results):
     results.sort(key=lambda x: x['value'], reverse=True)
     labels = [f"{item['ticker']} ({item['return_pct']:+.1f}%)" for item in results]
     values = [item['value'] for item in results]
@@ -54,7 +51,9 @@ def generate_pie_chart(results, total_profit):
     plt.pie(values, labels=labels, autopct='%1.1f%%', startangle=140, colors=colors, pctdistance=0.85, wedgeprops={'edgecolor': 'white', 'linewidth': 1})
     centre_circle = plt.Circle((0,0), 0.70, fc='white')
     plt.gca().add_artist(centre_circle)
-    plt.title(f'Portfolio Allocation\nNet P/L: ${total_profit:,.2f}', fontsize=14, fontweight='bold')
+    
+    # Title showing allocation overview without dollar totals
+    plt.title('Portfolio Allocation', fontsize=14, fontweight='bold')
     plt.tight_layout()
     
     chart_path = os.path.join(BASE_DIR, "portfolio_chart.png")
@@ -64,10 +63,10 @@ def generate_pie_chart(results, total_profit):
 
 def post_status_summary():
     portfolio = load_portfolio()
-    results, total_val, total_profit = fetch_portfolio_values(portfolio)
-    chart_file = generate_pie_chart(results, total_profit)
+    results, _ = fetch_portfolio_values(portfolio)
+    chart_file = generate_pie_chart(results)
 
-    summary_text = f"**Current Portfolio Value:** ${total_val:,.2f}\n**Total Net Profit/Loss:** ${total_profit:,.2f}"
+    summary_text = "Current allocation breakdown and position returns."
 
     if WEBHOOK_URL:
         payload = {
@@ -100,13 +99,13 @@ def execute_trade(action, ticker, shares_change, price):
 
     save_portfolio(portfolio)
 
-    results_after, total_val_after, net_profit = fetch_portfolio_values(portfolio)
+    results_after, total_val_after = fetch_portfolio_values(portfolio)
     new_ticker_val = next((item['value'] for item in results_after if item['ticker'] == ticker), 0)
     new_weight = (new_ticker_val / total_val_after * 100) if total_val_after > 0 else 0
 
-    chart_file = generate_pie_chart(results_after, net_profit)
+    chart_file = generate_pie_chart(results_after)
 
-    trade_text = f"Mark **{'bought' if action == 'BUY' else 'sold'}** {shares_change} shares of **{ticker}** at **${price:.2f}** per share.\nPosition Weight: **{new_weight:.1f}%** of portfolio."
+    trade_text = f"Mark **{'bought' if action == 'BUY' else 'sold'}** {shares_change} shares of **{ticker}**.\nNew Position Weight: **{new_weight:.1f}%** of portfolio."
 
     if WEBHOOK_URL:
         payload = {
