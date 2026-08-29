@@ -11,7 +11,8 @@ warnings.filterwarnings("ignore", message=".*utcnow.*")
 
 # Updated to match DISCORD_STOCK_WEBHOOK or fall back to DISCORD_WEBHOOK_URL
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_STOCK_WEBHOOK") or os.environ.get("DISCORD_WEBHOOK_URL")
-WATCHLIST_FILE = "watchlist.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+WATCHLIST_FILE = os.path.join(BASE_DIR, "watchlist.json")
 
 def load_watchlist():
     try:
