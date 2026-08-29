@@ -5,6 +5,7 @@ import warnings
 import requests
 import yfinance as yf
 
+# Suppress internal pandas/yfinance warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", message=".*utcnow.*")
 
@@ -27,7 +28,7 @@ def save_watchlist(watchlist):
     except Exception as e:
         print(f"Error saving {WATCHLIST_FILE}: {e}")
 
-def send_discord_alert(symbol, current_price, target_price):
+def send_discord_alert(symbol, current_price, day_low, target_price):
     if not DISCORD_WEBHOOK_URL:
         print("Error: DISCORD_WEBHOOK_URL environment variable is missing.")
         return
@@ -36,13 +37,14 @@ def send_discord_alert(symbol, current_price, target_price):
         "username": "Stock Monitor",
         "embeds": [
             {
-                "title": f"🚨 PRICE TARGET ALERT: {symbol}",
-                "color": 5763719,
+                "title": f"🚨 PRICE TARGET HIT: {symbol}",
+                "color": 5763719,  # Green embed color
                 "fields": [
+                    {"name": "Target Price", "value": f"${target_price:.2f}", "inline": True},
+                    {"name": "Day's Low", "value": f"${day_low:.2f}", "inline": True},
                     {"name": "Current Price", "value": f"${current_price:.2f}", "inline": True},
-                    {"name": "Target Price Hit", "value": f"${target_price:.2f}", "inline": True},
                 ],
-                "footer": {"text": "Target met and removed from watchlist"},
+                "footer": {"text": "Target met today and auto-removed from watchlist"},
                 "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             }
         ]
@@ -66,22 +68,31 @@ def check_prices():
 
     for symbol, targets in watchlist.items():
         try:
-            price = data.tickers[symbol].fast_info['lastPrice']
-            if price is None:
+            ticker_info = data.tickers[symbol].fast_info
+            
+            # Fetch both current price and the minimum price reached today
+            current_price = ticker_info.get('lastPrice')
+            day_low = ticker_info.get('dayLow')
+            
+            # Fall back to current_price if day_low is unavailable
+            check_price = day_low if day_low is not None else current_price
+
+            if check_price is None:
                 updated_watchlist[symbol] = targets
                 continue
 
             remaining_targets = []
             for target in targets:
-                if price <= target:
-                    print(f"ALERT TRIGGERED: {symbol} (${price:.2f} <= ${target:.2f})")
-                    send_discord_alert(symbol, price, target)
-                    modified = True  # Target reached, drop it from remaining_targets
+                # Check if the stock touched or dipped below the target at any point today
+                if check_price <= target:
+                    print(f"ALERT TRIGGERED: {symbol} (Day Low ${check_price:.2f} <= Target ${target:.2f})")
+                    send_discord_alert(symbol, current_price, check_price, target)
+                    modified = True  # Target breached; do not append to remaining_targets
                 else:
-                    print(f"OK: {symbol} (${price:.2f}) > target (${target:.2f})")
+                    print(f"OK: {symbol} (Day Low ${check_price:.2f}) > Target (${target:.2f})")
                     remaining_targets.append(target)
 
-            # Retain symbol only if remaining targets exist
+            # Keep symbol in JSON only if active targets remain
             if remaining_targets:
                 updated_watchlist[symbol] = remaining_targets
 
@@ -89,7 +100,7 @@ def check_prices():
             print(f"Error processing {symbol}: {e}")
             updated_watchlist[symbol] = targets
 
-    # Save changes locally if any targets were hit
+    # Save updated watchlist locally if any target was hit
     if modified:
         save_watchlist(updated_watchlist)
 
