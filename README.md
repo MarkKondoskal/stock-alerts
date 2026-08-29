@@ -40,4 +40,6 @@ python portfolio/Marks_portfolio_updates.py [ACTION] [TICKER] [SHARES] [PRICE]
 # Examples:
 python portfolio/Marks_portfolio_updates.py BUY APP 5 300.00
 python portfolio/Marks_portfolio_updates.py BUY AMZN 10 180.50
-python portfolio/Marks_portfolio_updates.py SELL META 2 525.00
+
+# Or if we need a status update run:
+python portfolio/Marks_portfolio_updates.py STATUS
