@@ -14,7 +14,7 @@ def send_heartbeat():
         "embeds": [
             {
                 "title": "🟢 SYSTEM HEARTBEAT",
-                "description": "Stock price monitor is active and checking target alerts.",
+                "description": "US Market open, Stock price monitor is active and checking target alerts.",
                 "color": 3066993,  # Blue/Green status color
                 "footer": {"text": "Scheduled Status Ping"},
                 "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
