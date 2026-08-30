@@ -37,13 +37,7 @@ jobs:
           DISCORD_SENTIMENT_WEBHOOK: ${{ secrets.DISCORD_SENTIMENT_WEBHOOK }}
         run: python alerts/sentiment_alert.py
 
-      # --- 3. HEARTBEAT ---
-      - name: Run Heartbeat Script
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_PORTFOLIO_TEST_WEBHOOK }}  # Make sure this secret exists, or reuse DISCORD_STOCK_WEBHOOK
-        run: python alerts/heartbeat.py
-
-      # --- 4. AUTO-COMMIT UPDATES ---
+      # --- 3. AUTO-COMMIT UPDATES ---
       - name: Auto-commit Watchlist & Sentiment State
         run: |
           git config --global user.name "github-actions[bot]"
