@@ -1,0 +1,27 @@
+name: Daily Heartbeat
+
+on:
+  schedule:
+    # 14:30 UTC = 9:30 AM ET (US market open) on weekdays
+    - cron: '30 14 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  send-heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install requests
+
+      - name: Run Heartbeat Script
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_PORTFOLIO_TEST_WEBHOOK }}
+        run: python alerts/heartbeat.py
