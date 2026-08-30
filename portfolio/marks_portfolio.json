@@ -1,296 +1,128 @@
 {
   "TSM": {
     "shares": 4,
-    "avg_price": 317.97,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 4,
-        "price": 317.97,
-        "fee": 0.0
-      }
-    ],
+    "avg_price": 93.16,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 4, "price": 93.16, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "SPGI": {
     "shares": 4,
-    "avg_price": 481.68,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 4,
-        "price": 481.68,
-        "fee": 0.0
-      }
-    ],
+    "avg_price": 382.43,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 4, "price": 382.43, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "CRM": {
-    "shares": 1.0,
-    "avg_price": 252.34,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 1.0,
-        "price": 252.34,
-        "fee": 0.0
-      }
-    ],
+    "shares": 3,
+    "avg_price": 234.96,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 3, "price": 234.96, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "DUOL": {
-    "shares": 4.0,
-    "avg_price": 176.48,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 4.0,
-        "price": 176.48,
-        "fee": 0.0
-      }
-    ],
+    "shares": 4,
+    "avg_price": 259.42,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 4, "price": 259.42, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "MSFT": {
-    "shares": 3.0,
-    "avg_price": 469.96,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 3.0,
-        "price": 469.96,
-        "fee": 0.0
-      }
-    ],
+    "shares": 4,
+    "avg_price": 356.07,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 4, "price": 356.07, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "AMD": {
     "shares": 2,
-    "avg_price": 223.47,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 2,
-        "price": 223.47,
-        "fee": 0.0
-      }
-    ],
+    "avg_price": 77.10,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 2, "price": 77.10, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "ADBE": {
-    "shares": 4.0,
-    "avg_price": 333.3,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 4.0,
-        "price": 333.3,
-        "fee": 0.0
-      }
-    ],
+    "shares": 4,
+    "avg_price": 297.99,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 4, "price": 297.99, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "ORCL": {
-    "shares": 5.0,
-    "avg_price": 193.84,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 5.0,
-        "price": 193.84,
-        "fee": 0.0
-      }
-    ],
+    "shares": 5,
+    "avg_price": 120.42,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 5, "price": 120.42, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "APP": {
-    "shares": 4.0,
-    "avg_price": 618.32,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 4.0,
-        "price": 618.32,
-        "fee": 0.0
-      }
-    ],
+    "shares": 4,
+    "avg_price": 364.76,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 4, "price": 364.76, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "GOOG": {
     "shares": 5,
-    "avg_price": 314.91,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 5,
-        "price": 314.91,
-        "fee": 0.0
-      }
-    ],
+    "avg_price": 167.42,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 5, "price": 167.42, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "AMZN": {
     "shares": 14,
-    "avg_price": 226.5,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 14,
-        "price": 226.5,
-        "fee": 0.0
-      }
-    ],
+    "avg_price": 206.03,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 14, "price": 206.03, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "ASML": {
-    "shares": 2.0,
-    "avg_price": 1158.22,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 2.0,
-        "price": 1158.22,
-        "fee": 0.0
-      }
-    ],
+    "shares": 3,
+    "avg_price": 676.56,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 3, "price": 676.56, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "ZETA": {
-    "shares": 69.0,
-    "avg_price": 19.91,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 69.0,
-        "price": 19.91,
-        "fee": 0.0
-      }
-    ],
+    "shares": 171,
+    "avg_price": 19.97,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 171, "price": 19.97, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "NVO": {
     "shares": 29,
-    "avg_price": 49.9,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 29,
-        "price": 49.9,
-        "fee": 0.0
-      }
-    ],
+    "avg_price": 66.99,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 29, "price": 66.99, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "META": {
     "shares": 5,
-    "avg_price": 649.25,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 5,
-        "price": 649.25,
-        "fee": 0.0
-      }
-    ],
+    "avg_price": 639.64,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 5, "price": 639.64, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "UBER": {
     "shares": 19,
-    "avg_price": 82.86,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 19,
-        "price": 82.86,
-        "fee": 0.0
-      }
-    ],
+    "avg_price": 80.89,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 19, "price": 80.89, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "MA": {
     "shares": 5,
-    "avg_price": 560.38,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 5,
-        "price": 560.38,
-        "fee": 0.0
-      }
-    ],
+    "avg_price": 527.55,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 5, "price": 527.55, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "VST": {
     "shares": 10,
-    "avg_price": 164.77,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 10,
-        "price": 164.77,
-        "fee": 0.0
-      }
-    ],
+    "avg_price": 144.22,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 10, "price": 144.22, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "PGY": {
-    "shares": 100.0,
-    "avg_price": 22.28,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 100.0,
-        "price": 22.28,
-        "fee": 0.0
-      }
-    ],
+    "shares": 100,
+    "avg_price": 14.28,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 100, "price": 14.28, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "SOFI": {
-    "shares": 194.0,
-    "avg_price": 27.46,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 194.0,
-        "price": 27.46,
-        "fee": 0.0
-      }
-    ],
+    "shares": 194,
+    "avg_price": 16.30,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 194, "price": 16.30, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "CELH": {
-    "shares": 39.0,
-    "avg_price": 47.75,
-    "transactions": [
-      {
-        "date": "2026-01-02",
-        "action": "BUY",
-        "shares": 39.0,
-        "price": 47.75,
-        "fee": 0.0
-      }
-    ],
+    "shares": 39,
+    "avg_price": 33.35,
+    "transactions": [{"date": "2026-08-30", "action": "BUY", "shares": 39, "price": 33.35, "fee": 0.0}],
     "realized_pl": 0.0
   },
   "closed_positions": []
