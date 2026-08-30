@@ -22,7 +22,7 @@ def send_heartbeat():
         ]
     }
 
-    response = requests.post(DISCORD_WEBHOOK_URL, json=payload)
+    response = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=15)
     if response.status_code in [200, 204]:
         print("Heartbeat sent successfully.")
     else:
