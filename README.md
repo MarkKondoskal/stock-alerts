@@ -21,8 +21,10 @@ Monitors overall market health and risk sentiment, posting alerts directly to Di
   * **Extreme Greed ($\ge 75$):** Signals heightened market euphoria or potential risk.
 
 * **CBOE Volatility Index (VIX):**
-  Monitors intraday spikes across key volatility thresholds (**12.0, 15.0, 25.0, 30.0, 35.0**).
-  * Triggers when intraday VIX ranges cross key support or resistance levels to flag market turbulence.
+  Monitors intraday spikes and drops across key thresholds using **directional hysteresis** to avoid duplicate alerts:
+  * **Downward levels (10, 12, 15):** Alerts when VIX crosses *below* the level. After a first alert, a new alert for that level is only allowed after VIX has **risen above** `level + 2.0` (e.g., after crossing 15, VIX must first rise above 17 before another 15 alert can fire).
+  * **Upward levels (25, 30, 35, 40, 45, 50):** Alerts when VIX crosses *above* the level. After an alert, a new alert requires VIX to **drop below** `level - 2.0` first (e.g., after crossing 25, VIX must fall below 23 to re‑arm).
+  * Each level can alert **at most once per UTC day**, dramatically reducing noise while still capturing meaningful swings.
 
 ---
 
@@ -65,9 +67,14 @@ All portfolio holdings and buy prices are stored inside `portfolio/marks_portfol
 
 Required GitHub Repository Secrets (`Settings` → `Secrets and variables` → `Actions`):
 
-* `DISCORD_STOCK_WEBHOOK` — Stock price target alert channel
-* `DISCORD_SENTIMENT_WEBHOOK` — Market sentiment & VIX alert channel
-* `DISCORD_PORTFOLIO_WEBHOOK` — Marks Portfolio updates channel
+| Secret Name | Purpose |
+|-------------|---------|
+| `DISCORD_STOCK_WEBHOOK` | Stock price target alert channel |
+| `DISCORD_SENTIMENT_WEBHOOK` | Market sentiment & VIX alert channel |
+| `DISCORD_PORTFOLIO_WEBHOOK` | Marks Portfolio updates channel |
+| `DISCORD_PORTFOLIO_TEST_WEBHOOK` (or `DISCORD_HEARTBEAT_WEBHOOK`) | Heartbeat monitor channel – used by `alerts/heartbeat.py` |
+
+*Note: The heartbeat script uses `DISCORD_WEBHOOK_URL`; in our workflow we set that to `DISCORD_PORTFOLIO_TEST_WEBHOOK`. If you prefer, you can reuse `DISCORD_STOCK_WEBHOOK` by updating the workflow accordingly.*
 
 ---
 
@@ -78,7 +85,7 @@ stock-alerts/
 │
 ├── .github/
 │   └── workflows/
-│       ├── stock_checker.yml        # Automated stock target & sentiment checker
+│       ├── stock_checker.yml        # Automated stock target & sentiment checker (runs every 15 min, 07:00-21:00 UTC, Mon-Fri)
 │       └── portfolio_summary.yml    # Web-interactive portfolio management GUI
 │
 ├── portfolio/
@@ -88,11 +95,8 @@ stock-alerts/
 ├── alerts/
 │   ├── watchlist.json               # Stock price targets
 │   ├── stock_alert.py               # Stock target checker
-│   ├── sentiment_alert.py           # CNN Fear & Greed + VIX monitor
+│   ├── sentiment_alert.py           # CNN Fear & Greed + VIX monitor with hysteresis
+│   ├── sentiment_state.json         # Persistent VIX and Fear/Greed state (auto‑committed)
 │   └── heartbeat.py                 # Status heartbeat monitor
 │
 └── README.md
-```
-
-
-
