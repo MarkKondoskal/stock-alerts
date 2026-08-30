@@ -18,10 +18,7 @@ CHART_FILE = os.path.join(BASE_DIR, "portfolio_chart.png")
 
 
 def get_current_price(ticker: str) -> float:
-    """
-    Fetch the latest price from Yahoo Finance.
-    Returns 0.0 if unavailable (caller must handle fallback).
-    """
+    """Fetch latest price from Yahoo Finance. Returns 0.0 if unavailable."""
     try:
         stock = yf.Ticker(ticker)
         price = getattr(stock.fast_info, "last_price", None) or getattr(stock.fast_info, "lastPrice", None)
@@ -33,11 +30,10 @@ def get_current_price(ticker: str) -> float:
 
 
 # -----------------------------------------------------------------------------
-# Portfolio file I/O with atomic writes
+# Portfolio I/O (atomic)
 # -----------------------------------------------------------------------------
 
 def load_portfolio():
-    """Load portfolio and convert old [shares, price] format to full dict."""
     try:
         with open(PORTFOLIO_FILE, "r") as f:
             data = json.load(f)
@@ -46,7 +42,7 @@ def load_portfolio():
 
     data.setdefault("closed_positions", [])
 
-    # Migrate old format
+    # Migrate old format [shares, price] to dict
     for ticker, value in list(data.items()):
         if ticker == "closed_positions":
             continue
@@ -55,11 +51,6 @@ def load_portfolio():
             data[ticker] = {
                 "shares": shares,
                 "avg_price": price,
-                "currency": "USD",
-                "account": "Merrill",
-                "target_pct": 0.0,
-                "conviction": "N/A",
-                "desired_buy_range": [0, 0],
                 "transactions": [
                     {"date": datetime.now().date().isoformat(),
                      "action": "BUY",
@@ -73,27 +64,25 @@ def load_portfolio():
 
 
 def save_portfolio(portfolio):
-    """Atomically write portfolio to disk using a temporary file."""
-    tmp_file = PORTFOLIO_FILE + ".tmp"
+    tmp = PORTFOLIO_FILE + ".tmp"
     try:
-        with open(tmp_file, "w", encoding="utf-8") as f:
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(portfolio, f, indent=2, ensure_ascii=False)
             f.write("\n")
-        os.replace(tmp_file, PORTFOLIO_FILE)
-        print("Portfolio saved atomically.")
+        os.replace(tmp, PORTFOLIO_FILE)
+        print("Portfolio saved.")
     except Exception as e:
-        print(f"Error saving portfolio: {e}")
-        if os.path.exists(tmp_file):
-            os.remove(tmp_file)
+        print(f"Error saving: {e}")
+        if os.path.exists(tmp):
+            os.remove(tmp)
         raise
 
 
 # -----------------------------------------------------------------------------
-# Cost basis helper
+# Compute cost basis for closed positions
 # -----------------------------------------------------------------------------
 
 def compute_cost_basis(transactions):
-    """Sum all BUY transaction amounts (shares * price) to get total cost basis."""
     total = 0.0
     for t in transactions:
         if t.get("action") == "BUY":
@@ -102,16 +91,10 @@ def compute_cost_basis(transactions):
 
 
 # -----------------------------------------------------------------------------
-# Fetch live values and compute metrics
+# Fetch current values
 # -----------------------------------------------------------------------------
 
 def fetch_portfolio_values(portfolio):
-    """
-    For each open ticker, fetch current price and compute:
-        - current value, allocation %, unrealised P&L %
-        - also collect cost basis for open positions
-    Returns (results, total_value, total_cost_open)
-    """
     results = []
     total_val = 0.0
     total_cost_open = 0.0
@@ -123,9 +106,8 @@ def fetch_portfolio_values(portfolio):
         shares = info["shares"]
         avg_price = info["avg_price"]
         current_price = get_current_price(ticker)
-
         if current_price == 0.0:
-            print(f"Warning: Using avg_price as fallback for {ticker} (no live price).")
+            print(f"Warning: Using avg_price as fallback for {ticker}")
             current_price = avg_price
 
         val = shares * current_price
@@ -138,45 +120,37 @@ def fetch_portfolio_values(portfolio):
         results.append({
             "ticker": ticker,
             "value": val,
-            "account": info.get("account", ""),
             "unrealized_pct": unrealized_pct,
-            "target_pct": info.get("target_pct", 0.0),
-            "conviction": info.get("conviction", "N/A"),
-            "buy_low": info.get("desired_buy_range", [0, 0])[0],
-            "buy_high": info.get("desired_buy_range", [0, 0])[1],
-            "shares": shares,
-            "avg_price": avg_price,
-            "current_price": current_price
         })
 
-    # Second pass: compute allocation percentages
+    # Compute allocation percentages
     for r in results:
         r["allocation_pct"] = (r["value"] / total_val * 100) if total_val > 0 else 0
 
     return results, total_val, total_cost_open
 
 
+# -----------------------------------------------------------------------------
+# Table builder (no extra columns)
+# -----------------------------------------------------------------------------
+
 def build_summary_table(results):
-    """Build a Markdown table (inside code block) with only percentages."""
     lines = [
         "```",
-        f"{'Ticker':<8} {'Account':<10} {'Alloc%':>7} {'Unreal%':>8} {'Target%':>8} {'Conviction':<12} {'Buy Range'}",
-        "-------- ---------- ------- -------- -------- ------------ ----------"
+        f"{'Ticker':<8} {'Alloc%':>8} {'Unreal%':>9}",
+        "-------- -------- ---------"
     ]
     for r in results:
-        lines.append(
-            f"{r['ticker']:<8} {r['account']:<10} {r['allocation_pct']:>6.1f}% {r['unrealized_pct']:>7.1f}% {r['target_pct']:>7.1f}% {r['conviction']:<12} {r['buy_low']:.0f}-{r['buy_high']:.0f}"
-        )
+        lines.append(f"{r['ticker']:<8} {r['allocation_pct']:>7.1f}% {r['unrealized_pct']:>8.1f}%")
     lines.append("```")
     return "\n".join(lines)
 
 
 # -----------------------------------------------------------------------------
-# Chart generation
+# Chart
 # -----------------------------------------------------------------------------
 
 def generate_pie_chart(results):
-    """Generate pie chart showing allocation percentages."""
     results.sort(key=lambda x: x['value'], reverse=True)
     labels = [f"{item['ticker']} ({item['allocation_pct']:.1f}%)" for item in results]
     values = [item['value'] for item in results]
@@ -187,7 +161,7 @@ def generate_pie_chart(results):
             colors=colors, pctdistance=0.85, wedgeprops={'edgecolor': 'white', 'linewidth': 1})
     centre_circle = plt.Circle((0, 0), 0.70, fc='white')
     plt.gca().add_artist(centre_circle)
-    plt.title('Portfolio Allocation (by position weight)', fontsize=14, fontweight='bold')
+    plt.title('Portfolio Allocation', fontsize=14, fontweight='bold')
     plt.tight_layout()
     plt.savefig(CHART_FILE, dpi=200)
     plt.close()
@@ -195,22 +169,17 @@ def generate_pie_chart(results):
 
 
 # -----------------------------------------------------------------------------
-# Discord posting with timeout
+# Discord
 # -----------------------------------------------------------------------------
 
 def post_to_discord(title, description, color, chart_path=None):
-    """Send an embed with optional pie chart attachment (with timeout)."""
     if not WEBHOOK_URL:
         print("Error: DISCORD_PORTFOLIO_WEBHOOK not set.")
         return
 
     payload = {
         "username": "Marks Portfolio",
-        "embeds": [{
-            "title": title,
-            "description": description,
-            "color": color,
-        }]
+        "embeds": [{"title": title, "description": description, "color": color}]
     }
 
     try:
@@ -222,15 +191,15 @@ def post_to_discord(title, description, color, chart_path=None):
                               files=files, timeout=15)
         else:
             requests.post(WEBHOOK_URL, json=payload, timeout=15)
-        print("Discord message sent.")
+        print("Discord sent.")
     except requests.Timeout:
-        print("Discord request timed out.")
+        print("Discord timeout.")
     except Exception as e:
-        print(f"Failed to send Discord message: {e}")
+        print(f"Discord error: {e}")
 
 
 # -----------------------------------------------------------------------------
-# Status summary (STATUS)
+# STATUS
 # -----------------------------------------------------------------------------
 
 def post_status_summary():
@@ -239,35 +208,25 @@ def post_status_summary():
     chart_path = generate_pie_chart(results)
     table = build_summary_table(results)
 
-    # ---- Compute returns using proper denominator ----
-    total_unrealized = total_val - total_cost_open
-
-    # Closed positions
+    # Total return including closed positions
     closed_positions = portfolio.get("closed_positions", [])
     total_realized_closed = sum(pos.get("total_realized_pl", 0) for pos in closed_positions)
     total_cost_closed = sum(pos.get("total_cost_basis", 0) for pos in closed_positions)
-
     total_cost_all = total_cost_open + total_cost_closed
-    total_return_all = ((total_unrealized + total_realized_closed) / total_cost_all * 100) if total_cost_all > 0 else 0
+    total_unrealized = total_val - total_cost_open
+    total_return_pct = ((total_unrealized + total_realized_closed) / total_cost_all * 100) if total_cost_all > 0 else 0
 
-    description = (
-        f"**Lifetime Return (on total invested):** {total_return_all:+.1f}%\n"
-        f"*(Open positions: {total_unrealized:+.2f} unrealized / Closed positions: {total_realized_closed:+.2f} realized)*\n\n"
-        f"{table}"
-    )
-
-    post_to_discord("📊 MARKS PORTFOLIO: CURRENT OVERVIEW",
-                    description, color=3447003, chart_path=chart_path)
+    description = f"**Lifetime Return:** {total_return_pct:+.1f}%\n\n{table}"
+    post_to_discord("📊 MARKS PORTFOLIO", description, color=3447003, chart_path=chart_path)
 
 
 # -----------------------------------------------------------------------------
-# Trade execution (BUY / SELL) with validation & closed position archiving
+# BUY / SELL
 # -----------------------------------------------------------------------------
 
 def execute_trade(action, ticker, shares_change, price):
-    # --- Input validation ---
     if shares_change <= 0:
-        raise ValueError("Number of shares must be positive.")
+        raise ValueError("Shares must be positive.")
     if price <= 0:
         raise ValueError("Price must be positive.")
     if action not in ("BUY", "SELL"):
@@ -295,24 +254,19 @@ def execute_trade(action, ticker, shares_change, price):
         portfolio[ticker] = {
             "shares": new_shares,
             "avg_price": round(new_avg, 2),
-            "currency": old_info.get("currency", "USD"),
-            "account": old_info.get("account", "Merrill"),
-            "target_pct": old_info.get("target_pct", 0.0),
-            "conviction": old_info.get("conviction", "N/A"),
-            "desired_buy_range": old_info.get("desired_buy_range", [0, 0]),
             "transactions": old_info.get("transactions", []) + [transaction],
             "realized_pl": old_info.get("realized_pl", 0.0)
         }
 
     elif action == "SELL":
         if ticker not in portfolio:
-            raise ValueError(f"Cannot sell {ticker}: position does not exist.")
+            raise ValueError(f"Cannot sell {ticker}: position not found.")
         old_info = portfolio[ticker]
         old_shares = old_info["shares"]
         old_avg = old_info["avg_price"]
 
         if shares_change > old_shares:
-            raise ValueError(f"Cannot sell {shares_change} shares of {ticker}: only {old_shares} held.")
+            raise ValueError(f"Cannot sell {shares_change} shares; only {old_shares} held.")
 
         realized_gain = (price - old_avg) * shares_change
         new_shares = old_shares - shares_change
@@ -328,18 +282,15 @@ def execute_trade(action, ticker, shares_change, price):
         new_realized_pl = old_info.get("realized_pl", 0.0) + realized_gain
 
         if new_shares <= 0:
-            # --- Archive closed position with its total cost basis ---
+            # Archive closed position
             total_cost_basis = compute_cost_basis(old_info.get("transactions", []))
-            closed_entry = {
+            portfolio["closed_positions"].append({
                 "ticker": ticker,
                 "closure_date": datetime.now().date().isoformat(),
                 "total_cost_basis": total_cost_basis,
                 "total_realized_pl": new_realized_pl,
                 "transactions": old_info.get("transactions", []) + [transaction],
-                "final_avg_price": old_avg,
-                "final_shares": old_shares
-            }
-            portfolio["closed_positions"].append(closed_entry)
+            })
             del portfolio[ticker]
         else:
             portfolio[ticker]["shares"] = new_shares
@@ -349,43 +300,40 @@ def execute_trade(action, ticker, shares_change, price):
 
     save_portfolio(portfolio)
 
-    # After trade, post updated status
+    # Post updated status after trade
     results, total_val, _ = fetch_portfolio_values(portfolio)
     chart_path = generate_pie_chart(results)
     table = build_summary_table(results)
 
+    # Find new weight of ticker if still open
     ticker_info = next((r for r in results if r["ticker"] == ticker), None)
     new_weight = ticker_info["allocation_pct"] if ticker_info else 0.0
 
-    desc = f"Mark **{'bought' if action == 'BUY' else 'sold'}** {shares_change} shares of **{ticker}**.\n"
-    desc += f"New Position Weight: **{new_weight:.1f}%** of portfolio.\n\n"
-    desc += table
-
+    desc = f"**{action}** {shares_change} shares of **{ticker}**\nNew weight: **{new_weight:.1f}%**\n\n{table}"
     color = 3066993 if action == "BUY" else 15158332
-    post_to_discord(f"📈 PORTFOLIO UPDATE: {action} {ticker}",
-                    desc, color=color, chart_path=chart_path)
+    post_to_discord(f"📈 PORTFOLIO UPDATE: {action} {ticker}", desc, color, chart_path=chart_path)
 
 
 # -----------------------------------------------------------------------------
-# Main entry point
+# Main
 # -----------------------------------------------------------------------------
 
 if __name__ == "__main__":
     try:
-        if len(sys.argv) > 1 and sys.argv[1].upper() in ["STATUS", "SUMMARY"]:
+        if len(sys.argv) > 1 and sys.argv[1].upper() == "STATUS":
             post_status_summary()
         elif len(sys.argv) >= 5:
-            trade_action = sys.argv[1].upper()
-            trade_ticker = sys.argv[2].upper()
-            trade_shares = int(sys.argv[3])
-            trade_price = float(sys.argv[4])
-            execute_trade(trade_action, trade_ticker, trade_shares, trade_price)
+            action = sys.argv[1].upper()
+            ticker = sys.argv[2].upper()
+            shares = int(sys.argv[3])
+            price = float(sys.argv[4])
+            execute_trade(action, ticker, shares, price)
         else:
             print("Usage:")
-            print("  Status:  python portfolio/marks_portfolio_update.py STATUS")
-            print("  Trade:   python portfolio/marks_portfolio_update.py BUY TICKER SHARES PRICE")
+            print("  STATUS: python marks_portfolio_update.py STATUS")
+            print("  BUY:    python marks_portfolio_update.py BUY TICKER SHARES PRICE")
+            print("  SELL:   python marks_portfolio_update.py SELL TICKER SHARES PRICE")
             sys.exit(1)
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
-        
