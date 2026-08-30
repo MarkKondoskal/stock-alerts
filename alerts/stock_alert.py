@@ -4,6 +4,7 @@ import time
 import warnings
 import requests
 import yfinance as yf
+import math
 
 # Suppress internal pandas/yfinance warnings
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -52,7 +53,7 @@ def send_discord_alert(symbol, current_price, day_low, target_price):
         ]
     }
     
-    response = requests.post(DISCORD_WEBHOOK_URL, json=payload)
+    response = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=15)
     if response.status_code not in [200, 204]:
         print(f"Failed to send alert: {response.status_code}, {response.text}")
     else:
@@ -65,7 +66,10 @@ def check_prices():
         return
 
     tickers_str = " ".join(watchlist.keys())
-    data = yf.Tickers(tickers_str)
+    try:
+        data = yf.Tickers(tickers_str)
+    except Exception as e:
+        raise RuntimeError(f"Failed to initialize market data client: {e}") from e
     
     modified = False
     updated_watchlist = {}
@@ -81,8 +85,8 @@ def check_prices():
             # Fall back to current_price if day_low is unavailable
             check_price = day_low if day_low is not None else current_price
 
-            if check_price is None:
-                print(f"Warning: Could not fetch price data for {symbol}.")
+            if check_price is None or not isinstance(check_price, (int, float)) or not math.isfinite(float(check_price)):
+                print(f"Warning: Could not fetch valid price data for {symbol}; keeping targets unchanged.")
                 updated_watchlist[symbol] = targets
                 continue
 
