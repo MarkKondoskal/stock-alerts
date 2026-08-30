@@ -229,16 +229,31 @@ def check_vix():
 
                 # Send alert
                 print(f"TRIGGER: VIX crossed DOWN through {level:.1f}!")
+                drop_amount = previous_price - current_val
+                
                 fields = [
-                    {"name": "Level Crossed Down", "value": f"📉 **{level:.1f}**", "inline": True},
-                    {"name": "Current VIX", "value": f"{current_val:.2f}", "inline": True},
-                    {"name": "Previous VIX", "value": f"{previous_price:.2f}", "inline": True},
-                    {"name": "Day's Range", "value": f"{day_low:.2f} - {day_high:.2f}", "inline": True},
+                    {
+                        "name": "📊 Market Context",
+                        "value": f"Volatility is cooling. Dropping below **{level:.1f}** suggests fear is easing and risk appetite may be returning.",
+                        "inline": False
+                    },
+                    {
+                        "name": "📉 Move",
+                        "value": f"{previous_price:.2f} → {current_val:.2f} (⬇️ {drop_amount:.2f})",
+                        "inline": True
+                    },
+                    {
+                        "name": "📈 Intraday Range",
+                        "value": f"{day_low:.2f} – {day_high:.2f}",
+                        "inline": True
+                    }
                 ]
+
                 sent = send_discord_sentiment_alert(
-                    title=f"🟢 VIX VOLATILITY DROP: Crossed Below {level:.1f}",
+                    title=f"🟢 VIX VOLATILITY DROP: Now at {current_val:.2f} (Below {level:.1f})",
                     fields=fields,
                     color=3066993,
+)
                 )
                 if sent:
                     state["vix"][level_key] = today
@@ -262,17 +277,33 @@ def check_vix():
                     print(f"VIX up {level:.1f}: already alerted today, reset not met (low {day_low:.2f} >= {level-RESET_OFFSET:.1f})")
                     continue
 
+                # Send alert
                 print(f"TRIGGER: VIX crossed UP through {level:.1f}!")
+                spike_amount = current_val - previous_price
+                
                 fields = [
-                    {"name": "Level Crossed Up", "value": f"📈 **{level:.1f}**", "inline": True},
-                    {"name": "Current VIX", "value": f"{current_val:.2f}", "inline": True},
-                    {"name": "Previous VIX", "value": f"{previous_price:.2f}", "inline": True},
-                    {"name": "Day's Range", "value": f"{day_low:.2f} - {day_high:.2f}", "inline": True},
+                    {
+                        "name": "📊 Market Context",
+                        "value": f"Volatility is spiking. Breaking above **{level:.1f}** signals rising uncertainty, fear, or market stress.",
+                        "inline": False
+                    },
+                    {
+                        "name": "📈 Move",
+                        "value": f"{previous_price:.2f} → {current_val:.2f} (⬆️ +{spike_amount:.2f})",
+                        "inline": True
+                    },
+                    {
+                        "name": "📉 Intraday Range",
+                        "value": f"{day_low:.2f} – {day_high:.2f}",
+                        "inline": True
+                    }
                 ]
-                sent = send_discord_sentiment_alert(
-                    title=f"⚠️ VIX VOLATILITY SPIKE: Crossed Above {level:.1f}",
-                    fields=fields,
-                    color=15158332,
+
+sent = send_discord_sentiment_alert(
+    title=f"🔴 VIX VOLATILITY SPIKE: Now at {current_val:.2f} (Above {level:.1f})",
+    fields=fields,
+    color=15158332,
+)
                 )
                 if sent:
                     state["vix"][level_key] = today
