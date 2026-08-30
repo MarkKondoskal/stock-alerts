@@ -17,11 +17,14 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 DISCORD_SENTIMENT_WEBHOOK = os.environ.get("DISCORD_SENTIMENT_WEBHOOK")
 
-# VIX alerts are intentionally directional:
-#   12, 15  -> alert only when VIX crosses DOWN through the level
-#   25, 30, 35 -> alert only when VIX crosses UP through the level
+
+# Directional VIX levels – alert only on first crossing each day
 VIX_DOWN_LEVELS = [12.0, 15.0]
-VIX_UP_LEVELS = [25.0, 30.0, 35.0]
+VIX_UP_LEVELS   = [25.0, 30.0, 35.0]
+
+# Reset hysteresis offset: after an alert, require VIX to move this far back
+# before allowing a new crossing alert.
+RESET_OFFSET = 2.0   # can be adjusted per level if needed
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(BASE_DIR, "sentiment_state.json")
@@ -150,20 +153,14 @@ def valid_number(value):
 
 def check_vix():
     """
-    Check directional VIX crossings.
+    Check directional VIX crossings with hysteresis to avoid duplicate alerts.
 
-    A crossing is detected using the previous observed VIX value stored in
-    sentiment_state.json. Today's high/low are also used so a crossing that
-    happened between two 15-minute workflow runs is still detected.
-
-    Downward levels:
-        previous >= level AND today's low <= level
-
-    Upward levels:
-        previous <= level AND today's high >= level
-
-    The first run only establishes a baseline and never sends a VIX alert.
-    Each directional level can alert at most once per UTC day.
+    For each level:
+      - If a crossing is detected (using previous price and day low/high),
+        we send an alert unless one has already been sent today AND the
+        reset condition has not been met.
+      - Reset condition for down levels: day high > level + RESET_OFFSET
+      - Reset condition for up levels: day low < level - RESET_OFFSET
     """
     state = load_state()
     today = datetime.now(timezone.utc).date().isoformat()
@@ -173,17 +170,9 @@ def check_vix():
         vix = yf.Ticker("^VIX")
         info = vix.fast_info
 
-        current_val = getattr(info, "last_price", None)
-        if current_val is None:
-            current_val = getattr(info, "lastPrice", None)
-
-        day_high = getattr(info, "day_high", None)
-        if day_high is None:
-            day_high = getattr(info, "dayHigh", None)
-
-        day_low = getattr(info, "day_low", None)
-        if day_low is None:
-            day_low = getattr(info, "dayLow", None)
+        current_val = getattr(info, "last_price", None) or getattr(info, "lastPrice", None)
+        day_high = getattr(info, "day_high", None) or getattr(info, "dayHigh", None)
+        day_low = getattr(info, "day_low", None) or getattr(info, "dayLow", None)
 
         if not all(valid_number(v) for v in (current_val, day_high, day_low)):
             print("VIX Check -> Valid market data unavailable; no alert sent.")
@@ -207,8 +196,7 @@ def check_vix():
             f"Previous: N/A | Low: {day_low:.2f} | High: {day_high:.2f}"
         )
 
-        # First run after state reset / first ever run:
-        # establish a baseline, but DO NOT generate an alert.
+        # First run after state reset – just store baseline, no alerts.
         if previous_price is None:
             print("VIX Check -> No previous price found; baseline initialized only.")
             state["vix_last_price"] = current_val
@@ -218,105 +206,79 @@ def check_vix():
         previous_price = float(previous_price)
 
         # ------------------------------------------------------------------
-        # Downward crossings: 12 and 15
+        # Process downward levels (12 and 15)
         # ------------------------------------------------------------------
         for level in VIX_DOWN_LEVELS:
             level_key = f"down_{level:g}"
             already_alerted = state["vix"].get(level_key) == today
 
+            # Crossing detected: previous was at/above level, day low at/below
             crossed_down = (
                 previous_price >= level
                 and day_low <= level
-                and current_val <= level
             )
 
-            if crossed_down and not already_alerted:
+            if crossed_down:
+                # If not alerted today OR reset condition met, allow new alert
+                reset_condition = day_high > (level + RESET_OFFSET)
+                if already_alerted and not reset_condition:
+                    print(f"VIX down {level:.1f}: already alerted today, reset not met (high {day_high:.2f} <= {level+RESET_OFFSET:.1f})")
+                    continue
+
+                # Send alert
                 print(f"TRIGGER: VIX crossed DOWN through {level:.1f}!")
-
                 fields = [
-                    {
-                        "name": "Level Crossed Down",
-                        "value": f"📉 **{level:.1f}**",
-                        "inline": True,
-                    },
-                    {
-                        "name": "Current VIX",
-                        "value": f"{current_val:.2f}",
-                        "inline": True,
-                    },
-                    {
-                        "name": "Previous VIX",
-                        "value": f"{previous_price:.2f}",
-                        "inline": True,
-                    },
-                    {
-                        "name": "Day's Range",
-                        "value": f"{day_low:.2f} - {day_high:.2f}",
-                        "inline": True,
-                    },
+                    {"name": "Level Crossed Down", "value": f"📉 **{level:.1f}**", "inline": True},
+                    {"name": "Current VIX", "value": f"{current_val:.2f}", "inline": True},
+                    {"name": "Previous VIX", "value": f"{previous_price:.2f}", "inline": True},
+                    {"name": "Day's Range", "value": f"{day_low:.2f} - {day_high:.2f}", "inline": True},
                 ]
-
                 sent = send_discord_sentiment_alert(
                     title=f"🟢 VIX VOLATILITY DROP: Crossed Below {level:.1f}",
                     fields=fields,
                     color=3066993,
                 )
-
                 if sent:
                     state["vix"][level_key] = today
 
         # ------------------------------------------------------------------
-        # Upward crossings: 25, 30 and 35
+        # Process upward levels (25, 30 and 35)
         # ------------------------------------------------------------------
         for level in VIX_UP_LEVELS:
             level_key = f"up_{level:g}"
             already_alerted = state["vix"].get(level_key) == today
 
+            # Crossing detected: previous was at/below level, day high at/above
             crossed_up = (
                 previous_price <= level
                 and day_high >= level
-                and current_val >= level
             )
 
-            if crossed_up and not already_alerted:
+            if crossed_up:
+                reset_condition = day_low < (level - RESET_OFFSET)
+                if already_alerted and not reset_condition:
+                    print(f"VIX up {level:.1f}: already alerted today, reset not met (low {day_low:.2f} >= {level-RESET_OFFSET:.1f})")
+                    continue
+
                 print(f"TRIGGER: VIX crossed UP through {level:.1f}!")
-
                 fields = [
-                    {
-                        "name": "Level Crossed Up",
-                        "value": f"📈 **{level:.1f}**",
-                        "inline": True,
-                    },
-                    {
-                        "name": "Current VIX",
-                        "value": f"{current_val:.2f}",
-                        "inline": True,
-                    },
-                    {
-                        "name": "Previous VIX",
-                        "value": f"{previous_price:.2f}",
-                        "inline": True,
-                    },
-                    {
-                        "name": "Day's Range",
-                        "value": f"{day_low:.2f} - {day_high:.2f}",
-                        "inline": True,
-                    },
+                    {"name": "Level Crossed Up", "value": f"📈 **{level:.1f}**", "inline": True},
+                    {"name": "Current VIX", "value": f"{current_val:.2f}", "inline": True},
+                    {"name": "Previous VIX", "value": f"{previous_price:.2f}", "inline": True},
+                    {"name": "Day's Range", "value": f"{day_low:.2f} - {day_high:.2f}", "inline": True},
                 ]
-
                 sent = send_discord_sentiment_alert(
                     title=f"⚠️ VIX VOLATILITY SPIKE: Crossed Above {level:.1f}",
                     fields=fields,
                     color=15158332,
                 )
-
                 if sent:
                     state["vix"][level_key] = today
 
         # Store the latest observation for the next workflow run.
         state["vix_last_price"] = current_val
 
-        # Keep only today's alert markers.
+        # Keep only today's alert markers (discard old dates)
         state["vix"] = {
             key: value
             for key, value in state["vix"].items()
@@ -327,7 +289,6 @@ def check_vix():
 
     except Exception as e:
         print(f"Error checking VIX: {e}")
-
 
 # -----------------------------------------------------------------------------
 # CNN Fear & Greed
