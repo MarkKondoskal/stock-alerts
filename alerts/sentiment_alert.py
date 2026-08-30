@@ -329,7 +329,7 @@ sent = send_discord_sentiment_alert(
 
 
 def check_fear_and_greed():
-    """Alert only when Fear & Greed enters or leaves an extreme zone."""
+    """Alert ONLY when entering Extreme Fear or Extreme Greed. Silence on return to normal."""
     state = load_state()
 
     try:
@@ -348,50 +348,73 @@ def check_fear_and_greed():
 
         print(f"Fear & Greed Check -> Score: {score:.1f} | Rating: {rating}")
 
+        # Determine new state
         if score <= 25 or "extreme fear" in rating:
             new_state = "extreme_fear"
-            title = "🚨 MARKET SENTIMENT: EXTREME FEAR"
-            state_text = "CRITICAL EXTREME FEAR"
+            title = "🚨 EXTREME FEAR IN THE MARKET"
             color = 15158332
+            fields = [
+                {
+                    "name": "📉 What This Means",
+                    "value": "Investors are panicking – this often signals **oversold conditions** and can be a **contrarian buying opportunity**.",
+                    "inline": False
+                },
+                {
+                    "name": "📊 Fear & Greed Score",
+                    "value": f"**{score:.1f}** (Extreme Fear)",
+                    "inline": True
+                },
+                {
+                    "name": "📝 Rating",
+                    "value": rating.title(),
+                    "inline": True
+                },
+            ]
+            should_alert = True  # Explicit flag
+
         elif score >= 75 or "extreme greed" in rating:
             new_state = "extreme_greed"
-            title = "🚨 MARKET SENTIMENT: EXTREME GREED"
-            state_text = "CRITICAL EXTREME GREED"
+            title = "🚨 EXTREME GREED IN THE MARKET"
             color = 3066993
+            fields = [
+                {
+                    "name": "📈 What This Means",
+                    "value": "Investors are euphoric – this often signals **overbought conditions** and can be a **warning sign of a pullback**.",
+                    "inline": False
+                },
+                {
+                    "name": "📊 Fear & Greed Score",
+                    "value": f"**{score:.1f}** (Extreme Greed)",
+                    "inline": True
+                },
+                {
+                    "name": "📝 Rating",
+                    "value": rating.title(),
+                    "inline": True
+                },
+            ]
+            should_alert = True
+
         else:
             new_state = "normal"
-            title = None
-            state_text = None
-            color = None
+            # No Discord alert for normal – we just update state silently
+            should_alert = False
 
         previous_state = state.get("fear_greed_state")
 
-        if new_state != previous_state:
+        # Only send Discord alert if we are entering an extreme AND it's a state change
+        if should_alert and new_state != previous_state:
             state["fear_greed_state"] = new_state
-
-            if new_state != "normal":
-                print(f"TRIGGER: Fear & Greed changed to {new_state}.")
-
-                fields = [
-                    {
-                        "name": "Fear & Greed Index",
-                        "value": f"**{score:.1f}**",
-                        "inline": True,
-                    },
-                    {
-                        "name": "Sentiment State",
-                        "value": state_text,
-                        "inline": True,
-                    },
-                ]
-
-                send_discord_sentiment_alert(
-                    title=title,
-                    fields=fields,
-                    color=color,
-                )
-            else:
-                print("OK: Fear & Greed returned to normal territory. State reset.")
+            print(f"TRIGGER: Fear & Greed changed to {new_state}.")
+            send_discord_sentiment_alert(
+                title=title,
+                fields=fields,
+                color=color,
+            )
+        elif new_state == "normal" and previous_state != "normal":
+            # Silently update state when returning to normal (no Discord spam)
+            print(f"Fear & Greed returned to normal (Score: {score:.1f}). No alert sent.")
+            state["fear_greed_state"] = new_state
         else:
             print(f"OK: Fear & Greed remains {new_state}; no duplicate alert sent.")
 
