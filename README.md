@@ -12,7 +12,7 @@ Continuously tracks individual stock price targets using live `yfinance` market 
 * **Auto-Removal:** Once a target level is hit, an alert posts to Discord (`#stock-alerts`) and the target is automatically removed from `watchlist.json` via GitHub Actions bot.
 * **International Support:** Supports international symbols using exchange suffixes (e.g., `ZAP.OL` for Zaptec ASA on Oslo Børs).
 
-🛠️ Watchlist Manager (NEW – GitHub UI)
+## 🛠️ Watchlist Manager (GitHub UI)
 You can now add/remove price targets directly from the GitHub Actions UI – no manual JSON editing.
 
 How to Use
