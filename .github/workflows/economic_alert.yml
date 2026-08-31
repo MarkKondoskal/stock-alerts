@@ -1,0 +1,40 @@
+name: US Economic Data Monitor
+
+on:
+  schedule:
+    # Runs at 13:30 UTC, Monday–Friday (covers US morning releases)
+    - cron: '30 13 * * 1-5'
+  workflow_dispatch:  # allows manual testing
+
+jobs:
+  check-econ-data:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install requests
+
+      - name: Run economic data monitor
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          # Reuse the sentiment webhook for economic alerts
+          DISCORD_ECONOMIC_WEBHOOK: ${{ secrets.DISCORD_SENTIMENT_WEBHOOK }}
+        run: |
+          python alerts/economic_alert.py
+
+      - name: Commit & push state updates
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git diff --quiet || (git add alerts/economic_state.json && git commit -m "Update economic data state" && git push)
