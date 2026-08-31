@@ -2,7 +2,7 @@ name: Daily Heartbeat
 
 on:
   schedule:
-    # 14:30 UTC = 9:30 AM ET (US market open) on weekdays
+    # 14:30 UTC = 9:30 AM ET (US market open)
     - cron: '30 14 * * 1-5'
   workflow_dispatch:
 
