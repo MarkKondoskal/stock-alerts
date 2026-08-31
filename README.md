@@ -12,6 +12,30 @@ Continuously tracks individual stock price targets using live `yfinance` market 
 * **Auto-Removal:** Once a target level is hit, an alert posts to Discord (`#stock-alerts`) and the target is automatically removed from `watchlist.json` via GitHub Actions bot.
 * **International Support:** Supports international symbols using exchange suffixes (e.g., `ZAP.OL` for Zaptec ASA on Oslo Børs).
 
+🛠️ Watchlist Manager (NEW – GitHub UI)
+You can now add/remove price targets directly from the GitHub Actions UI – no manual JSON editing.
+
+How to Use
+Go to the Actions tab.
+
+Select Watchlist Manager from the left sidebar.
+
+Click Run workflow.
+
+Choose an action:
+
+ADD – add a target price for a ticker (e.g., NVDA + 150.00).
+
+REMOVE – remove a specific target.
+
+REMOVE_ALL – remove all targets for a ticker.
+
+LIST – print the current watchlist to the logs (no commit).
+
+Fill in the required fields and run.
+
+The changes are automatically committed and pushed – the next stock check will use the updated watchlist.
+
 ### 2. Market Sentiment & Volatility (`alerts/sentiment_alert.py`)
 Monitors overall market health and risk sentiment, posting alerts directly to Discord (`#sentiment-alerts`):
 
