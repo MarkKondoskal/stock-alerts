@@ -13,6 +13,7 @@ on:
           - REMOVE
           - REMOVE_ALL
           - LIST
+          - STATUS          # NEW – posts watchlist to Discord
       ticker:
         description: 'Ticker symbol (e.g., NVDA)'
         required: false
@@ -36,16 +37,21 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install dependencies
+        run: pip install requests
+
       - name: Run watchlist manager
         env:
           ACTION: ${{ github.event.inputs.action }}
           TICKER: ${{ github.event.inputs.ticker }}
           TARGET: ${{ github.event.inputs.target }}
+          DISCORD_STOCK_WEBHOOK: ${{ secrets.DISCORD_STOCK_WEBHOOK }}
         run: |
           python alerts/watchlist_manager.py "$ACTION" "$TICKER" "$TARGET"
 
       - name: Commit & push changes
-        if: github.event.inputs.action != 'LIST'
+        # Only commit for ADD/REMOVE/REMOVE_ALL – not for LIST or STATUS
+        if: github.event.inputs.action != 'LIST' && github.event.inputs.action != 'STATUS'
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
