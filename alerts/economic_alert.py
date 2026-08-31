@@ -13,11 +13,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(BASE_DIR, "economic_state.json")
 
 # FRED series IDs and human-readable names
+# - GDP uses "A191RL1Q225SBEA" which is Real GDP Percent Change (quarterly, annualized)
 SERIES = {
     "UNRATE": "Unemployment Rate",
     "CPIAUCSL": "CPI (All Urban Consumers)",
-    "GDP": "Gross Domestic Product (GDP)",
-    "PCEPI": "Core PCE (Inflation)",
+    "A191RL1Q225SBEA": "GDP Growth Rate (QoQ Annualized)",
+    "PCEPI": "Core PCE Price Index",
     "PAYEMS": "Nonfarm Payrolls",
     "ICSA": "Initial Jobless Claims (Weekly)",
 }
@@ -79,32 +80,45 @@ def format_change(current, previous):
     arrow = "🟢" if diff > 0 else "🔴" if diff < 0 else "⚪"
     return f"{arrow} {diff:+.2f}"
 
+def should_show_percent(series_name):
+    """Return True if the series is naturally shown as a percentage."""
+    keywords = ["Rate", "Unemployment", "Growth"]
+    return any(kw in series_name for kw in keywords)
+
 def send_discord_alert(series_name, date, current, previous):
     """Send a formatted embed with current, previous, and change."""
     if not WEBHOOK_URL:
         print("Error: Discord webhook not configured.")
         return
 
-    # Format based on series type
-    if "Rate" in series_name or "Unemployment" in series_name:
+    # Determine formatting
+    is_percent = should_show_percent(series_name)
+
+    if is_percent:
         current_str = f"{current:.2f}%"
         prev_str = f"{previous:.2f}%" if previous is not None else "N/A"
         change_str = format_change(current, previous) if previous is not None else "N/A"
-    elif "Claims" in series_name:
+    elif "Claims" in series_name or "Payrolls" in series_name:
         current_str = f"{current:,.0f}"
         prev_str = f"{previous:,.0f}" if previous is not None else "N/A"
         change_str = format_change(current, previous) if previous is not None else "N/A"
     else:
+        # Index numbers (CPI, PCE)
         current_str = f"{current:,.2f}"
         prev_str = f"{previous:,.2f}" if previous is not None else "N/A"
         change_str = format_change(current, previous) if previous is not None else "N/A"
+
+    # Extra note for GDP growth
+    note = ""
+    if "GDP" in series_name:
+        note = "\n*(Quarter-over-quarter, annualized)*"
 
     payload = {
         "username": "Sentiment Man",
         "embeds": [
             {
                 "title": f"📊 {series_name}",
-                "description": f"**Latest Release:** {date}",
+                "description": f"**Latest Release:** {date}{note}",
                 "color": 3447003,
                 "fields": [
                     {"name": "Current", "value": current_str, "inline": True},
@@ -142,16 +156,13 @@ def main():
             print(f"Warning: No data for {name} ({series_id})")
             continue
 
-        # Latest is first, previous is second (if available)
         latest_date, latest_value = observations[0]
         previous_value = observations[1][1] if len(observations) > 1 else None
 
-        # Check if we already have this data point
         last_entry = state.get(series_id, {})
         last_date = last_entry.get("date")
         last_value = last_entry.get("value")
 
-        # If date is newer, or date is same but value changed (revision), send alert
         if last_date is None or latest_date > last_date or (latest_date == last_date and latest_value != last_value):
             print(f"New data for {name}: {latest_date} = {latest_value} (prev: {previous_value})")
             send_discord_alert(name, latest_date, latest_value, previous_value)
