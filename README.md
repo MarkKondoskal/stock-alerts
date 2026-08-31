@@ -12,10 +12,10 @@ Continuously tracks individual stock price targets using live `yfinance` market 
 * **Auto-Removal:** Once a target level is hit, an alert posts to Discord (`#stock-alerts`) and the target is automatically removed from `watchlist.json` via GitHub Actions bot.
 * **International Support:** Supports international symbols using exchange suffixes (e.g., `ZAP.OL` for Zaptec ASA on Oslo Børs).
 
-## 🛠️ Watchlist Manager (GitHub UI)
+### 2. Watchlist Manager (GitHub UI)
 You can now add/remove price targets directly from the GitHub Actions UI – no manual JSON editing.
 
-How to Use
+**How to Use**
 Go to the Actions tab.
 
 Select Watchlist Manager from the left sidebar.
@@ -36,7 +36,7 @@ Fill in the required fields and run.
 
 The changes are automatically committed and pushed – the next stock check will use the updated watchlist.
 
-### 2. Market Sentiment & Volatility (`alerts/sentiment_alert.py`)
+### 3. Market Sentiment & Volatility (`alerts/sentiment_alert.py`)
 Monitors overall market health and risk sentiment, posting alerts directly to Discord (`#sentiment-alerts`):
 
 * **CNN Fear & Greed Index:**
@@ -49,6 +49,38 @@ Monitors overall market health and risk sentiment, posting alerts directly to Di
   * **Downward levels (10, 12, 15):** Alerts when VIX crosses *below* the level. After a first alert, a new alert for that level is only allowed after VIX has **risen above** `level + 2.0` (e.g., after crossing 15, VIX must first rise above 17 before another 15 alert can fire).
   * **Upward levels (25, 30, 35, 40, 45, 50):** Alerts when VIX crosses *above* the level. After an alert, a new alert requires VIX to **drop below** `level - 2.0` first (e.g., after crossing 25, VIX must fall below 23 to re‑arm).
   * Each level can alert **at most once per UTC day**, dramatically reducing noise while still capturing meaningful swings.
+
+### 4. US Economic Data Monitor (alerts/economic_alert.py)
+Fetches key US economic indicators from the FRED API (Federal Reserve) and posts updates to Discord (#sentiment-alerts) when new data is released.
+
+Indicators tracked:
+
+Unemployment Rate
+
+CPI (All Urban Consumers)
+
+GDP Growth Rate (quarter‑over‑quarter, annualised – shown as a percentage)
+
+Core PCE Price Index
+
+Nonfarm Payrolls
+
+Initial Jobless Claims (weekly)
+
+What you see in Discord:
+
+Current value (formatted with % for rates/growth, whole numbers for payrolls/claims)
+
+Previous value (for trend context)
+
+Change with an up/down arrow (🟢 / 🔴 / ⚪)
+
+Data source (FRED)
+
+How it avoids spam: Stores the last date and value per series – only alerts when a new release or revision is detected.
+
+Cost: Free – uses only the FRED API (no paid data sources).
+
 
 ---
 
