@@ -1,0 +1,52 @@
+name: Watchlist Manager
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'ADD'
+        type: choice
+        options:
+          - ADD
+          - REMOVE
+          - REMOVE_ALL
+          - LIST
+      ticker:
+        description: 'Ticker symbol (e.g., NVDA)'
+        required: false
+        default: ''
+      target:
+        description: 'Target price (required for ADD/REMOVE)'
+        required: false
+        default: ''
+
+jobs:
+  manage-watchlist:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run watchlist manager
+        env:
+          ACTION: ${{ github.event.inputs.action }}
+          TICKER: ${{ github.event.inputs.ticker }}
+          TARGET: ${{ github.event.inputs.target }}
+        run: |
+          python alerts/watchlist_manager.py "$ACTION" "$TICKER" "$TARGET"
+
+      - name: Commit & push changes
+        if: github.event.inputs.action != 'LIST'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git diff --quiet || (git add alerts/watchlist.json && git commit -m "Update watchlist: ${{ github.event.inputs.action }} ${{ github.event.inputs.ticker }}" && git push)
