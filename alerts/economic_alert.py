@@ -12,6 +12,7 @@ FRED_API_KEY = os.environ.get("FRED_API_KEY")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(BASE_DIR, "economic_state.json")
 
+# FRED series IDs and human-readable names
 SERIES = {
     "UNRATE": "Unemployment Rate",
     "CPIAUCSL": "CPI (All Urban Consumers)",
@@ -19,10 +20,12 @@ SERIES = {
     "PCEPI": "Core PCE Price Index",
     "PAYEMS": "Nonfarm Payrolls",
     "ICSA": "Initial Jobless Claims (Weekly)",
+    "DFEDTARU": "Fed Funds Target Rate (Upper)",
+    "DFEDTARL": "Fed Funds Target Rate (Lower)",
 }
 
 # ------------------------------------------------------------
-# Helpers
+# Helpers (unchanged)
 # ------------------------------------------------------------
 
 def load_state():
@@ -98,6 +101,8 @@ def send_discord_alert(series_name, date, current, previous):
     note = ""
     if "GDP" in series_name:
         note = "\n*(Quarter-over-quarter, annualized)*"
+    elif "Fed Funds" in series_name:
+        note = "\n*(Federal Reserve target range)*"
 
     payload = {
         "username": "Sentiment Man",
