@@ -96,9 +96,7 @@ Required GitHub Repository Secrets (`Settings` → `Secrets and variables` → `
 | `DISCORD_STOCK_WEBHOOK` | Stock price target alert channel |
 | `DISCORD_SENTIMENT_WEBHOOK` | Market sentiment & VIX alert channel |
 | `DISCORD_PORTFOLIO_WEBHOOK` | Marks Portfolio updates channel |
-| `DISCORD_PORTFOLIO_TEST_WEBHOOK` (or `DISCORD_HEARTBEAT_WEBHOOK`) | Heartbeat monitor channel – used by `alerts/heartbeat.py` |
-
-*Note: The heartbeat script uses `DISCORD_WEBHOOK_URL`; in our workflow we set that to `DISCORD_PORTFOLIO_TEST_WEBHOOK`. If you prefer, you can reuse `DISCORD_STOCK_WEBHOOK` by updating the workflow accordingly.*
+| `DISCORD_PORTFOLIO_TEST_WEBHOOK | Heartbeat monitor channel – used by `alerts/heartbeat.py` |
 
 ---
 
@@ -109,18 +107,19 @@ stock-alerts/
 │
 ├── .github/
 │   └── workflows/
-│       ├── stock_checker.yml        # Automated stock target & sentiment checker (runs every 15 min, 07:00-21:00 UTC, Mon-Fri)
-│       └── portfolio_summary.yml    # Web-interactive portfolio management GUI
+│       ├── stock_checker.yml        # Runs every 15 min, 07:00-21:00 UTC, Mon-Fri
+│       ├── portfolio_summary.yml    # Portfolio management (STATUS, BUY, SELL)
+│       └── watchlist_manager.yml    # Add/remove watchlist targets via UI
 │
 ├── portfolio/
-│   ├── marks_portfolio.json         # Live position holdings and buy prices
+│   ├── marks_portfolio.json         # Live holdings, transactions, realised P&L
 │   └── marks_portfolio_update.py    # Portfolio manager & pie chart generator
 │
 ├── alerts/
 │   ├── watchlist.json               # Stock price targets
-│   ├── stock_alert.py               # Stock target checker
+│   ├── stock_alert.py               # Checks targets, posts alerts, auto-removes
 │   ├── sentiment_alert.py           # CNN Fear & Greed + VIX monitor with hysteresis
-│   ├── sentiment_state.json         # Persistent VIX and Fear/Greed state (auto‑committed)
-│   └── heartbeat.py                 # Status heartbeat monitor
+│   ├── sentiment_state.json         # Persistent VIX & Fear/Greed state (auto‑committed)
+│   └── heartbeat.py                 # Daily system heartbeat (scheduled at 14:30 UTC)
 │
 └── README.md
