@@ -9,11 +9,11 @@ from datetime import datetime
 
 WEBHOOK_URL = os.environ.get("DISCORD_ECONOMIC_WEBHOOK") or os.environ.get("DISCORD_SENTIMENT_WEBHOOK")
 FRED_API_KEY = os.environ.get("FRED_API_KEY")
+TE_API_KEY = os.environ.get("TRADING_ECONOMICS_API_KEY")  # optional
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(BASE_DIR, "economic_state.json")
 
 # FRED series IDs and human-readable names
-# - GDP uses "A191RL1Q225SBEA" which is Real GDP Percent Change (quarterly, annualized)
 SERIES = {
     "UNRATE": "Unemployment Rate",
     "CPIAUCSL": "CPI (All Urban Consumers)",
@@ -21,6 +21,17 @@ SERIES = {
     "PCEPI": "Core PCE Price Index",
     "PAYEMS": "Nonfarm Payrolls",
     "ICSA": "Initial Jobless Claims (Weekly)",
+}
+
+# Mapping from FRED series ID to Trading Economics indicator code
+# You can find the correct codes at https://tradingeconomics.com/api/indicators
+TE_MAP = {
+    "UNRATE": "unemployment rate",
+    "CPIAUCSL": "inflation cpi",
+    "A191RL1Q225SBEA": "gdp growth rate",
+    "PCEPI": "pce price index",
+    "PAYEMS": "nonfarm payrolls",
+    "ICSA": "initial jobless claims",
 }
 
 # ------------------------------------------------------------
@@ -39,14 +50,10 @@ def save_state(state):
         json.dump(state, f, indent=2)
 
 def fetch_fred_data(series_id, limit=2):
-    """
-    Fetch the latest 'limit' observations for a given FRED series.
-    Returns list of (date, value) or empty list on error.
-    """
+    """Fetch latest observations from FRED."""
     if not FRED_API_KEY:
         print("Error: FRED_API_KEY is missing.")
         return []
-
     url = (
         f"https://api.stlouisfed.org/fred/series/observations"
         f"?series_id={series_id}"
@@ -55,7 +62,6 @@ def fetch_fred_data(series_id, limit=2):
         f"&sort_order=desc"
         f"&limit={limit}"
     )
-
     try:
         resp = requests.get(url, timeout=10)
         resp.raise_for_status()
@@ -72,46 +78,77 @@ def fetch_fred_data(series_id, limit=2):
         print(f"Error fetching {series_id}: {e}")
         return []
 
+def fetch_te_forecast(series_id):
+    """Fetch forecast (consensus) from Trading Economics."""
+    if not TE_API_KEY:
+        return None
+    indicator = TE_MAP.get(series_id)
+    if not indicator:
+        return None
+    url = f"https://api.tradingeconomics.com/indicators/forecast?c={TE_API_KEY}&d1={indicator}"
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        if data and len(data) > 0:
+            return data[0].get("Forecast")
+    except Exception as e:
+        print(f"Could not fetch forecast for {series_id}: {e}")
+    return None
+
+def format_value(value, series_name):
+    """Format a number based on the series type."""
+    if value is None:
+        return "N/A"
+    if "Rate" in series_name or "Unemployment" in series_name or "Growth" in series_name:
+        return f"{value:.2f}%"
+    elif "Claims" in series_name or "Payrolls" in series_name:
+        return f"{value:,.0f}"
+    else:
+        return f"{value:,.2f}"
+
 def format_change(current, previous):
-    """Return a string with an arrow and the change."""
     if previous is None:
         return "N/A"
     diff = current - previous
     arrow = "🟢" if diff > 0 else "🔴" if diff < 0 else "⚪"
     return f"{arrow} {diff:+.2f}"
 
-def should_show_percent(series_name):
-    """Return True if the series is naturally shown as a percentage."""
-    keywords = ["Rate", "Unemployment", "Growth"]
-    return any(kw in series_name for kw in keywords)
-
-def send_discord_alert(series_name, date, current, previous):
-    """Send a formatted embed with current, previous, and change."""
+def send_discord_alert(series_name, date, current, previous, forecast):
     if not WEBHOOK_URL:
         print("Error: Discord webhook not configured.")
         return
 
-    # Determine formatting
-    is_percent = should_show_percent(series_name)
+    # Format all values
+    current_str = format_value(current, series_name)
+    prev_str = format_value(previous, series_name) if previous is not None else "N/A"
+    forecast_str = format_value(forecast, series_name) if forecast is not None else "N/A"
 
-    if is_percent:
-        current_str = f"{current:.2f}%"
-        prev_str = f"{previous:.2f}%" if previous is not None else "N/A"
-        change_str = format_change(current, previous) if previous is not None else "N/A"
-    elif "Claims" in series_name or "Payrolls" in series_name:
-        current_str = f"{current:,.0f}"
-        prev_str = f"{previous:,.0f}" if previous is not None else "N/A"
-        change_str = format_change(current, previous) if previous is not None else "N/A"
-    else:
-        # Index numbers (CPI, PCE)
-        current_str = f"{current:,.2f}"
-        prev_str = f"{previous:,.2f}" if previous is not None else "N/A"
-        change_str = format_change(current, previous) if previous is not None else "N/A"
+    # Determine if actual beat forecast
+    beat_forecast = ""
+    if forecast is not None and previous is not None:
+        diff_vs_forecast = current - forecast
+        if abs(diff_vs_forecast) < 0.01:
+            beat_forecast = "✅ In line with expectations"
+        elif diff_vs_forecast > 0:
+            beat_forecast = "🔥 Hot (above forecast)"
+        else:
+            beat_forecast = "❄️ Soft (below forecast)"
 
-    # Extra note for GDP growth
+    # Additional note for GDP
     note = ""
     if "GDP" in series_name:
-        note = "\n*(Quarter-over-quarter, annualized)*"
+        note = "\n*(QoQ annualized)*"
+
+    # Build fields
+    fields = [
+        {"name": "Current", "value": current_str, "inline": True},
+        {"name": "Previous", "value": prev_str, "inline": True},
+        {"name": "Expected", "value": forecast_str, "inline": True},
+        {"name": "Change (vs Prev)", "value": format_change(current, previous) if previous is not None else "N/A", "inline": True},
+    ]
+    if beat_forecast:
+        fields.append({"name": "Assessment", "value": beat_forecast, "inline": False})
 
     payload = {
         "username": "Sentiment Man",
@@ -120,12 +157,7 @@ def send_discord_alert(series_name, date, current, previous):
                 "title": f"📊 {series_name}",
                 "description": f"**Latest Release:** {date}{note}",
                 "color": 3447003,
-                "fields": [
-                    {"name": "Current", "value": current_str, "inline": True},
-                    {"name": "Previous", "value": prev_str, "inline": True},
-                    {"name": "Change", "value": change_str, "inline": True},
-                    {"name": "Data Source", "value": "FRED (Federal Reserve)", "inline": False}
-                ],
+                "fields": fields,
                 "footer": {"text": "Economic Data Monitor"},
                 "timestamp": datetime.utcnow().isoformat()
             }
@@ -147,6 +179,9 @@ def main():
         print("Error: FRED_API_KEY environment variable not set. Exiting.")
         return
 
+    if not TE_API_KEY:
+        print("Warning: TRADING_ECONOMICS_API_KEY not set – expected values will be skipped.")
+
     state = load_state()
     new_alerts = []
 
@@ -159,13 +194,17 @@ def main():
         latest_date, latest_value = observations[0]
         previous_value = observations[1][1] if len(observations) > 1 else None
 
+        # Fetch forecast if available
+        forecast = fetch_te_forecast(series_id) if TE_API_KEY else None
+
+        # Check if this is a new release
         last_entry = state.get(series_id, {})
         last_date = last_entry.get("date")
         last_value = last_entry.get("value")
 
         if last_date is None or latest_date > last_date or (latest_date == last_date and latest_value != last_value):
-            print(f"New data for {name}: {latest_date} = {latest_value} (prev: {previous_value})")
-            send_discord_alert(name, latest_date, latest_value, previous_value)
+            print(f"New data for {name}: {latest_date} = {latest_value} (prev: {previous_value}, forecast: {forecast})")
+            send_discord_alert(name, latest_date, latest_value, previous_value, forecast)
             state[series_id] = {"date": latest_date, "value": latest_value}
             new_alerts.append(f"{name} -> {latest_value} ({latest_date})")
         else:
