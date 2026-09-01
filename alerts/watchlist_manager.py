@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import requests
+import yfinance as yf
 from datetime import datetime
 from pathlib import Path
 
@@ -66,6 +67,17 @@ def list_watchlist():
     for ticker, targets in sorted(data.items()):
         print(f"{ticker}: {', '.join(map(str, targets))}")
 
+def get_current_price(ticker):
+    """Fetch live price for a ticker using yfinance."""
+    try:
+        stock = yf.Ticker(ticker)
+        price = getattr(stock.fast_info, "last_price", None) or getattr(stock.fast_info, "lastPrice", None)
+        if price is not None and isinstance(price, (int, float)) and price > 0:
+            return round(price, 2)
+    except Exception as e:
+        print(f"Could not fetch price for {ticker}: {e}")
+    return None
+
 def send_watchlist_to_discord():
     data = load_watchlist()
     if not data:
@@ -76,12 +88,21 @@ def send_watchlist_to_discord():
         print("Error: No Discord webhook URL configured.")
         return
 
-    # Build description: list of tickers and targets
-    lines = []
-    for ticker, targets in sorted(data.items()):
+    # Build table rows
+    rows = []
+    for ticker in sorted(data.keys()):
+        targets = data[ticker]
         targets_str = ", ".join(f"${t:.2f}" for t in targets)
-        lines.append(f"**{ticker}** → {targets_str}")
-    description = "\n".join(lines) if lines else "*No targets set.*"
+        current_price = get_current_price(ticker)
+        current_str = f"${current_price:.2f}" if current_price is not None else "N/A"
+        rows.append(f"| {ticker} | {current_str} | {targets_str} |")
+
+    # Create Markdown table
+    table_header = "| Ticker | Current | Targets |\n|--------|---------|---------|"
+    table_body = "\n".join(rows)
+    table = f"{table_header}\n{table_body}"
+
+    description = f"**Watchlist with live prices**\n\n{table}"
 
     payload = {
         "username": "Watchlist Bot",
