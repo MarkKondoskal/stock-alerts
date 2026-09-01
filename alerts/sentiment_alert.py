@@ -17,25 +17,20 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 DISCORD_SENTIMENT_WEBHOOK = os.environ.get("DISCORD_SENTIMENT_WEBHOOK")
 
-
 # Directional VIX levels – alert only on first crossing each day
-VIX_DOWN_LEVELS = [10.0, 12.0, 15.0]          
-VIX_UP_LEVELS   = [25.0, 30.0, 35.0, 40.0, 45.0, 50.0]   
+VIX_DOWN_LEVELS = [10.0, 12.0, 15.0]
+VIX_UP_LEVELS   = [25.0, 30.0, 35.0, 40.0, 45.0, 50.0]
 
 # Reset hysteresis offset: after an alert, require VIX to move this far back
 # before allowing a new crossing alert.
-RESET_OFFSET = 2.0   # can be adjusted per level if needed
-# can be adjusted like so RESET_OFFSET = {12: 1.5, 15: 2.0, 25: 2.0, 30: 2.5, 35: 3.0} 
-
+RESET_OFFSET = 2.0
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(BASE_DIR, "sentiment_state.json")
 
-
 # -----------------------------------------------------------------------------
 # State management
 # -----------------------------------------------------------------------------
-
 
 def empty_state():
     return {
@@ -44,46 +39,31 @@ def empty_state():
         "fear_greed_state": None,
     }
 
-
 def load_state():
-    """Load persistent state while remaining compatible with the old state format."""
     try:
         with open(STATE_FILE, "r", encoding="utf-8") as f:
             state = json.load(f)
-
         if not isinstance(state, dict):
             raise ValueError("State file does not contain a JSON object")
-
         state.setdefault("vix", {})
         state.setdefault("fear_greed_state", None)
-
-        # Migration from the old name used by the previous implementation.
         if "vix_last_price" not in state:
             state["vix_last_price"] = state.get("vix_last_close")
-
-        # Remove the old misleading field after migration.
         state.pop("vix_last_close", None)
-
         return state
-
     except FileNotFoundError:
         return empty_state()
     except (json.JSONDecodeError, OSError, ValueError, TypeError) as e:
         print(f"Warning: Could not load sentiment state: {e}. Starting with empty state.")
         return empty_state()
 
-
 def save_state(state):
-    """Atomically save state so a failed write cannot corrupt the real state file."""
     tmp_file = STATE_FILE + ".tmp"
-
     try:
         with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(state, f, indent=2)
             f.write("\n")
-
         os.replace(tmp_file, STATE_FILE)
-
     except OSError as e:
         print(f"Error saving sentiment state: {e}")
         try:
@@ -92,11 +72,9 @@ def save_state(state):
         except OSError:
             pass
 
-
 # -----------------------------------------------------------------------------
 # Discord
 # -----------------------------------------------------------------------------
-
 
 def post_webhook(payload):
     response = requests.post(
@@ -104,15 +82,12 @@ def post_webhook(payload):
         json=payload,
         timeout=15,
     )
-
     if response.status_code not in (200, 204):
         raise RuntimeError(
             f"Discord returned HTTP {response.status_code}: {response.text}"
         )
 
-
 def send_discord_sentiment_alert(title, fields, color):
-    """Send a Market Sentiment Discord embed."""
     if not DISCORD_SENTIMENT_WEBHOOK:
         print("Error: DISCORD_SENTIMENT_WEBHOOK environment variable is missing.")
         return False
@@ -138,32 +113,18 @@ def send_discord_sentiment_alert(title, fields, color):
         print(f"Failed to send sentiment alert: {e}")
         return False
 
-
 # -----------------------------------------------------------------------------
 # VIX
 # -----------------------------------------------------------------------------
 
-
 def valid_number(value):
-    """Return True when value is a finite number."""
     return (
         value is not None
         and isinstance(value, (int, float))
         and math.isfinite(float(value))
     )
 
-
 def check_vix():
-    """
-    Check directional VIX crossings with hysteresis to avoid duplicate alerts.
-
-    For each level:
-      - If a crossing is detected (using previous price and day low/high),
-        we send an alert unless one has already been sent today AND the
-        reset condition has not been met.
-      - Reset condition for down levels: day high > level + RESET_OFFSET
-      - Reset condition for up levels: day low < level - RESET_OFFSET
-    """
     state = load_state()
     today = datetime.now(timezone.utc).date().isoformat()
     state.setdefault("vix", {})
@@ -198,7 +159,6 @@ def check_vix():
             f"Previous: N/A | Low: {day_low:.2f} | High: {day_high:.2f}"
         )
 
-        # First run after state reset – just store baseline, no alerts.
         if previous_price is None:
             print("VIX Check -> No previous price found; baseline initialized only.")
             state["vix_last_price"] = current_val
@@ -208,64 +168,45 @@ def check_vix():
         previous_price = float(previous_price)
 
         # ------------------------------------------------------------------
-        # Process downward levels (12 and 15)
+        # Process downward levels
         # ------------------------------------------------------------------
         for level in VIX_DOWN_LEVELS:
             level_key = f"down_{level:g}"
             already_alerted = state["vix"].get(level_key) == today
 
-            # Crossing detected: previous was at/above level, day low at/below
             crossed_down = (
                 previous_price >= level
                 and day_low <= level
             )
 
             if crossed_down:
-                # If not alerted today OR reset condition met, allow new alert
                 reset_condition = day_high > (level + RESET_OFFSET)
                 if already_alerted and not reset_condition:
                     print(f"VIX down {level:.1f}: already alerted today, reset not met (high {day_high:.2f} <= {level+RESET_OFFSET:.1f})")
                     continue
 
-                # Send alert
                 print(f"TRIGGER: VIX crossed DOWN through {level:.1f}!")
-                drop_amount = previous_price - current_val
-                
                 fields = [
-                    {
-                        "name": "📊 Market Context",
-                        "value": f"Volatility is cooling. Dropping below **{level:.1f}** suggests fear is easing and risk appetite may be returning.",
-                        "inline": False
-                    },
-                    {
-                        "name": "📉 Move",
-                        "value": f"{previous_price:.2f} → {current_val:.2f} (⬇️ {drop_amount:.2f})",
-                        "inline": True
-                    },
-                    {
-                        "name": "📈 Intraday Range",
-                        "value": f"{day_low:.2f} – {day_high:.2f}",
-                        "inline": True
-                    }
+                    {"name": "Level Crossed Down", "value": f"📉 **{level:.1f}**", "inline": True},
+                    {"name": "Current VIX", "value": f"{current_val:.2f}", "inline": True},
+                    {"name": "Previous VIX", "value": f"{previous_price:.2f}", "inline": True},
+                    {"name": "Day's Range", "value": f"{day_low:.2f} - {day_high:.2f}", "inline": True},
                 ]
-
                 sent = send_discord_sentiment_alert(
-                    title=f"🟢 VIX VOLATILITY DROP: Now at {current_val:.2f} (Below {level:.1f})",
+                    title=f"🟢 VIX VOLATILITY DROP: Crossed Below {level:.1f}",
                     fields=fields,
                     color=3066993,
-)
                 )
                 if sent:
                     state["vix"][level_key] = today
 
         # ------------------------------------------------------------------
-        # Process upward levels (25, 30 and 35)
+        # Process upward levels
         # ------------------------------------------------------------------
         for level in VIX_UP_LEVELS:
             level_key = f"up_{level:g}"
             already_alerted = state["vix"].get(level_key) == today
 
-            # Crossing detected: previous was at/below level, day high at/above
             crossed_up = (
                 previous_price <= level
                 and day_high >= level
@@ -277,41 +218,24 @@ def check_vix():
                     print(f"VIX up {level:.1f}: already alerted today, reset not met (low {day_low:.2f} >= {level-RESET_OFFSET:.1f})")
                     continue
 
-                # Send alert
                 print(f"TRIGGER: VIX crossed UP through {level:.1f}!")
-                spike_amount = current_val - previous_price
-                
                 fields = [
-                    {
-                        "name": "📊 Market Context",
-                        "value": f"Volatility is spiking. Breaking above **{level:.1f}** signals rising uncertainty, fear, or market stress.",
-                        "inline": False
-                    },
-                    {
-                        "name": "📈 Move",
-                        "value": f"{previous_price:.2f} → {current_val:.2f} (⬆️ +{spike_amount:.2f})",
-                        "inline": True
-                    },
-                    {
-                        "name": "📉 Intraday Range",
-                        "value": f"{day_low:.2f} – {day_high:.2f}",
-                        "inline": True
-                    }
+                    {"name": "Level Crossed Up", "value": f"📈 **{level:.1f}**", "inline": True},
+                    {"name": "Current VIX", "value": f"{current_val:.2f}", "inline": True},
+                    {"name": "Previous VIX", "value": f"{previous_price:.2f}", "inline": True},
+                    {"name": "Day's Range", "value": f"{day_low:.2f} - {day_high:.2f}", "inline": True},
                 ]
-
-sent = send_discord_sentiment_alert(
-    title=f"🔴 VIX VOLATILITY SPIKE: Now at {current_val:.2f} (Above {level:.1f})",
-    fields=fields,
-    color=15158332,
-)
+                sent = send_discord_sentiment_alert(
+                    title=f"⚠️ VIX VOLATILITY SPIKE: Crossed Above {level:.1f}",
+                    fields=fields,
+                    color=15158332,
                 )
                 if sent:
                     state["vix"][level_key] = today
 
-        # Store the latest observation for the next workflow run.
         state["vix_last_price"] = current_val
 
-        # Keep only today's alert markers (discard old dates)
+        # Keep only today's alert markers
         state["vix"] = {
             key: value
             for key, value in state["vix"].items()
@@ -327,9 +251,7 @@ sent = send_discord_sentiment_alert(
 # CNN Fear & Greed
 # -----------------------------------------------------------------------------
 
-
 def check_fear_and_greed():
-    """Alert ONLY when entering Extreme Fear or Extreme Greed. Silence on return to normal."""
     state = load_state()
 
     try:
@@ -348,7 +270,6 @@ def check_fear_and_greed():
 
         print(f"Fear & Greed Check -> Score: {score:.1f} | Rating: {rating}")
 
-        # Determine new state
         if score <= 25 or "extreme fear" in rating:
             new_state = "extreme_fear"
             title = "🚨 EXTREME FEAR IN THE MARKET"
@@ -356,22 +277,21 @@ def check_fear_and_greed():
             fields = [
                 {
                     "name": "📉 What This Means",
-                    "value": "Investors are panicking – this often signals **oversold conditions** and can be a **contrarian buying opportunity**.",
+                    "value": "Investors are panicking – often signals oversold conditions and contrarian buying opportunity.",
                     "inline": False
                 },
                 {
-                    "name": "📊 Fear & Greed Score",
+                    "name": "Fear & Greed Score",
                     "value": f"**{score:.1f}** (Extreme Fear)",
                     "inline": True
                 },
                 {
-                    "name": "📝 Rating",
+                    "name": "Rating",
                     "value": rating.title(),
                     "inline": True
                 },
             ]
-            should_alert = True  # Explicit flag
-
+            should_alert = True
         elif score >= 75 or "extreme greed" in rating:
             new_state = "extreme_greed"
             title = "🚨 EXTREME GREED IN THE MARKET"
@@ -379,30 +299,27 @@ def check_fear_and_greed():
             fields = [
                 {
                     "name": "📈 What This Means",
-                    "value": "Investors are euphoric – this often signals **overbought conditions** and can be a **warning sign of a pullback**.",
+                    "value": "Investors are euphoric – often signals overbought conditions and can be a warning sign of a pullback.",
                     "inline": False
                 },
                 {
-                    "name": "📊 Fear & Greed Score",
+                    "name": "Fear & Greed Score",
                     "value": f"**{score:.1f}** (Extreme Greed)",
                     "inline": True
                 },
                 {
-                    "name": "📝 Rating",
+                    "name": "Rating",
                     "value": rating.title(),
                     "inline": True
                 },
             ]
             should_alert = True
-
         else:
             new_state = "normal"
-            # No Discord alert for normal – we just update state silently
             should_alert = False
 
         previous_state = state.get("fear_greed_state")
 
-        # Only send Discord alert if we are entering an extreme AND it's a state change
         if should_alert and new_state != previous_state:
             state["fear_greed_state"] = new_state
             print(f"TRIGGER: Fear & Greed changed to {new_state}.")
@@ -412,7 +329,6 @@ def check_fear_and_greed():
                 color=color,
             )
         elif new_state == "normal" and previous_state != "normal":
-            # Silently update state when returning to normal (no Discord spam)
             print(f"Fear & Greed returned to normal (Score: {score:.1f}). No alert sent.")
             state["fear_greed_state"] = new_state
         else:
@@ -425,11 +341,9 @@ def check_fear_and_greed():
     except Exception as e:
         print(f"Unexpected error checking Fear & Greed Index: {e}")
 
-
 # -----------------------------------------------------------------------------
 # Main
 # -----------------------------------------------------------------------------
-
 
 if __name__ == "__main__":
     print("Running Market Sentiment Check...")
