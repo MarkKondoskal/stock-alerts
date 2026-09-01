@@ -129,23 +129,6 @@ def check_vix():
     today = datetime.now(timezone.utc).date().isoformat()
     state.setdefault("vix", {})
 
-    # ---- FORCE ALERT TEST ----
-    print("⚠️ FORCE TEST: Simulating VIX crossing 15")
-    fields = [
-        {"name": "Level Crossed Down", "value": "📉 **15.0**", "inline": True},
-        {"name": "Current VIX", "value": "14.80", "inline": True},
-        {"name": "Previous VIX", "value": "16.20", "inline": True},
-        {"name": "Day's Range", "value": "14.50 - 16.30", "inline": True},
-    ]
-    send_discord_sentiment_alert(
-        title="🧪 TEST ALERT: VIX Crossed Below 15.0",
-        fields=fields,
-        color=3066993,
-    )
-    print("Test alert sent.")
-    return
-    # ---- END FORCE TEST ----
-
     try:
         vix = yf.Ticker("^VIX")
         info = vix.fast_info
