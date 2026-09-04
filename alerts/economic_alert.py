@@ -4,7 +4,7 @@ import requests
 from datetime import datetime
 
 # ------------------------------------------------------------
-# Configuration
+# Configuration (unchanged)
 # ------------------------------------------------------------
 
 WEBHOOK_URL = os.environ.get("DISCORD_ECONOMIC_WEBHOOK") or os.environ.get("DISCORD_SENTIMENT_WEBHOOK")
@@ -12,7 +12,6 @@ FRED_API_KEY = os.environ.get("FRED_API_KEY")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(BASE_DIR, "economic_state.json")
 
-# FRED series IDs and human-readable names
 SERIES = {
     "UNRATE": "Unemployment Rate",
     "CPIAUCSL": "CPI (All Urban Consumers)",
@@ -78,46 +77,68 @@ def format_change(current, previous):
     arrow = "🟢" if diff > 0 else "🔴" if diff < 0 else "⚪"
     return f"{arrow} {diff:+.2f}"
 
-def send_discord_alert(series_name, date, current, previous):
+# ------------------------------------------------------------
+# NEW: Batch Discord sender
+# ------------------------------------------------------------
+
+def send_batch_discord_alert(alerts):
+    """
+    alerts: list of dicts with keys:
+        - name
+        - date
+        - current
+        - previous
+        - note (optional)
+    """
     if not WEBHOOK_URL:
         print("Error: Discord webhook not configured.")
         return
 
-    is_percent = should_show_percent(series_name)
+    # Build fields
+    fields = []
+    for alert in alerts:
+        name = alert["name"]
+        date = alert["date"]
+        current = alert["current"]
+        previous = alert["previous"]
+        note = alert.get("note", "")
 
-    if is_percent:
-        current_str = f"{current:.2f}%"
-        prev_str = f"{previous:.2f}%" if previous is not None else "N/A"
-        change_str = format_change(current, previous) if previous is not None else "N/A"
-    elif "Claims" in series_name or "Payrolls" in series_name:
-        current_str = f"{current:,.0f}"
-        prev_str = f"{previous:,.0f}" if previous is not None else "N/A"
-        change_str = format_change(current, previous) if previous is not None else "N/A"
-    else:
-        current_str = f"{current:,.2f}"
-        prev_str = f"{previous:,.2f}" if previous is not None else "N/A"
-        change_str = format_change(current, previous) if previous is not None else "N/A"
+        is_percent = should_show_percent(name)
+        if is_percent:
+            current_str = f"{current:.2f}%"
+            prev_str = f"{previous:.2f}%" if previous is not None else "N/A"
+            change_str = format_change(current, previous) if previous is not None else "N/A"
+        elif "Claims" in name or "Payrolls" in name:
+            current_str = f"{current:,.0f}"
+            prev_str = f"{previous:,.0f}" if previous is not None else "N/A"
+            change_str = format_change(current, previous) if previous is not None else "N/A"
+        else:
+            current_str = f"{current:,.2f}"
+            prev_str = f"{previous:,.2f}" if previous is not None else "N/A"
+            change_str = format_change(current, previous) if previous is not None else "N/A"
 
-    note = ""
-    if "GDP" in series_name:
-        note = "\n*(Quarter-over-quarter, annualized)*"
-    elif "Fed Funds" in series_name:
-        note = "\n*(Federal Reserve target range)*"
+        field_value = (
+            f"**Current:** {current_str}\n"
+            f"**Previous:** {prev_str}\n"
+            f"**Change:** {change_str}"
+        )
+        if note:
+            field_value += f"\n*{note}*"
+
+        fields.append({
+            "name": f"📊 {name} – {date}",
+            "value": field_value,
+            "inline": False
+        })
 
     payload = {
         "username": "Sentiment Man",
         "embeds": [
             {
-                "title": f"📊 {series_name}",
-                "description": f"**Latest Release:** {date}{note}",
+                "title": "📊 Economic Data Updates",
                 "color": 3447003,
-                "fields": [
-                    {"name": "Current", "value": current_str, "inline": True},
-                    {"name": "Previous", "value": prev_str, "inline": True},
-                    {"name": "Change", "value": change_str, "inline": True},
-                    {"name": "Data Source", "value": "FRED (Federal Reserve)", "inline": False}
-                ],
-                "footer": {"text": "Economic Data Monitor"},
+                "fields": fields,
+                "footer": {"text": "FRED (Federal Reserve)"},
                 "timestamp": datetime.utcnow().isoformat()
             }
         ]
@@ -125,9 +146,9 @@ def send_discord_alert(series_name, date, current, previous):
 
     try:
         requests.post(WEBHOOK_URL, json=payload, timeout=15)
-        print(f"Alert sent for {series_name}")
+        print(f"Batch alert sent for {len(alerts)} indicators.")
     except Exception as e:
-        print(f"Failed to send Discord alert: {e}")
+        print(f"Failed to send Discord batch alert: {e}")
 
 # ------------------------------------------------------------
 # Main
@@ -139,7 +160,8 @@ def main():
         return
 
     state = load_state()
-    new_alerts = []
+    new_alerts_data = []      # store alert details for batching
+    new_series_updated = []   # just for logging
 
     for series_id, name in SERIES.items():
         observations = fetch_fred_data(series_id, limit=2)
@@ -156,15 +178,30 @@ def main():
 
         if last_date is None or latest_date > last_date or (latest_date == last_date and latest_value != last_value):
             print(f"New data for {name}: {latest_date} = {latest_value} (prev: {previous_value})")
-            send_discord_alert(name, latest_date, latest_value, previous_value)
+            # Prepare alert data
+            note = ""
+            if "GDP" in name:
+                note = "Quarter-over-quarter, annualized"
+            elif "Fed Funds" in name:
+                note = "Federal Reserve target range"
+
+            new_alerts_data.append({
+                "name": name,
+                "date": latest_date,
+                "current": latest_value,
+                "previous": previous_value,
+                "note": note,
+            })
+            new_series_updated.append(f"{name} -> {latest_value} ({latest_date})")
             state[series_id] = {"date": latest_date, "value": latest_value}
-            new_alerts.append(f"{name} -> {latest_value} ({latest_date})")
         else:
             print(f"No new data for {name} (last: {last_date})")
 
-    if new_alerts:
+    # Send a single batch alert if there are any updates
+    if new_alerts_data:
+        send_batch_discord_alert(new_alerts_data)
         save_state(state)
-        print(f"✅ Updated state file with {len(new_alerts)} new indicators.")
+        print(f"✅ Updated state file with {len(new_alerts_data)} new indicators.")
     else:
         print("ℹ️ No new economic data released since last check.")
 
