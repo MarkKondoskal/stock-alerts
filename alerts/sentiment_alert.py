@@ -23,7 +23,7 @@ VIX_UP_LEVELS   = [25.0, 30.0, 35.0, 40.0, 45.0, 50.0]
 
 # Reset hysteresis offset: after an alert, require VIX to move this far back
 # before allowing a new crossing alert.
-RESET_OFFSET = 2.0
+RESET_OFFSET = 3.0
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(BASE_DIR, "sentiment_state.json")
