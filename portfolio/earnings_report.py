@@ -391,7 +391,8 @@ def format_earnings_table(data):
 
     lines.append(f"**{ticker}**")
     lines.append(
-        f"*Earnings date: {data['earnings_date'].strftime('%Y-%m-%d')}*"
+    f"*Reported: {data['earnings_date'].strftime('%Y-%m-%d')}*"
+    )
     )
 
     lines.append("```")
@@ -528,52 +529,68 @@ def format_earnings_table(data):
 # Discord
 # -----------------------------------------------------------------------------
 
-def post_to_discord(description, color=3447003):
+def post_to_discord(data):
     if not WEBHOOK_URL:
         print("❌ ERROR: DISCORD_PORTFOLIO_WEBHOOK is not set.")
-        print("Check GitHub Settings → Secrets and variables → Actions.")
         return False
 
-    print("🔎 Discord webhook variable is present.")
-    print(f"Message length: {len(description)} characters")
+    ticker = data["ticker"]
+
+    description = format_earnings_table(data)
 
     payload = {
         "username": "Earnings Bot",
-        "embeds": [{
-            "title": "📈 Portfolio Earnings Highlights",
-            "description": description,
-            "color": color
-        }]
+        "embeds": [
+            {
+                "title": f"📈 {ticker} Earnings",
+                "description": description,
+                "color": 3447003
+            }
+        ]
     }
 
+    # ?wait=true makes Discord return a response after processing
+    # the webhook request, which makes debugging much easier.
+    webhook_url = WEBHOOK_URL
+
+    if "?" not in webhook_url:
+        webhook_url += "?wait=true"
+    elif "wait=" not in webhook_url:
+        webhook_url += "&wait=true"
+
     try:
+        print(f"📨 Sending {ticker} earnings to Discord...")
+
         response = requests.post(
-            WEBHOOK_URL,
+            webhook_url,
             json=payload,
-            timeout=15
+            timeout=20
         )
 
-        print(f"Discord HTTP status: {response.status_code}")
+        print(
+            f"Discord response for {ticker}: "
+            f"{response.status_code}"
+        )
 
-        if response.status_code >= 200 and response.status_code < 300:
-            print("✅ Earnings report successfully sent to Discord.")
+        if 200 <= response.status_code < 300:
+            print(f"✅ {ticker} successfully sent.")
             return True
 
-        print("❌ Discord rejected the webhook.")
+        print(f"❌ Discord rejected {ticker}.")
         print(f"Response: {response.text}")
 
         return False
 
     except requests.exceptions.Timeout:
-        print("❌ Discord request timed out.")
+        print(f"❌ Discord timeout while sending {ticker}.")
         return False
 
     except requests.exceptions.RequestException as e:
-        print(f"❌ Discord request failed: {e}")
+        print(f"❌ Discord request failed for {ticker}: {e}")
         return False
 
     except Exception as e:
-        print(f"❌ Unexpected Discord error: {e}")
+        print(f"❌ Unexpected Discord error for {ticker}: {e}")
         return False
 
 # -----------------------------------------------------------------------------
@@ -658,21 +675,36 @@ def main():
 
         return
 
-    description = ""
+print()
+print("=" * 60)
+print("SENDING EARNINGS REPORTS TO DISCORD")
+print("=" * 60)
 
-    for data in reports:
-        description += format_earnings_table(data)
-        description += "\n\n"
+successful = 0
+failed = 0
 
-    print(f"📨 Discord message length: {len(description)} characters")
+for data in reports:
 
-    success = post_to_discord(description)
+    ticker = data["ticker"]
+
+    success = post_to_discord(data)
 
     if success:
-        print("🎉 Earnings workflow completed successfully.")
+        successful += 1
     else:
-        print("💥 Earnings workflow completed WITHOUT Discord delivery.")
+        failed += 1
 
+print()
+print("=" * 60)
+print("DISCORD REPORT SUMMARY")
+print("=" * 60)
 
-if __name__ == "__main__":
-    main()
+print(f"Successful: {successful}")
+print(f"Failed:     {failed}")
+print(f"Total:      {len(reports)}")
+
+if failed == 0:
+    print("🎉 All earnings reports sent successfully.")
+
+else:
+    print("⚠️ Some earnings reports failed to send.")
