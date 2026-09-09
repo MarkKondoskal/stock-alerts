@@ -597,17 +597,59 @@ def post_to_discord(data):
 # Main
 # -----------------------------------------------------------------------------
 
+
 def main():
     print("=" * 60)
     print("PORTFOLIO EARNINGS REPORT")
     print("=" * 60)
 
     portfolio = load_portfolio()
+
     if not portfolio:
-        print("❌ No portfolio data found.")
+        print("❌ No portfolio data found.")   # fixed the extra 'a'
         return
 
-    # ... (rest of main() as originally written, up to the point where reports is built)
+    print(f"📊 Portfolio contains {len(portfolio)} holdings.")
+    print(f"📁 Portfolio file: {PORTFOLIO_FILE}")
+
+    report_mode = os.environ.get("REPORT_MODE", "all").lower()
+    print(f"📋 Report mode: {report_mode}")
+
+    today = datetime.now().date()
+    print(f"📅 Today: {today}")
+    print("=" * 60)
+
+    # ------------- BUILD THE REPORTS LIST -------------
+    reports = []   # <-- MUST be defined here
+
+    for ticker in portfolio.keys():
+        print()
+        print(f"🔍 Checking {ticker}...")
+
+        data = get_earnings_data(ticker)
+
+        if data is None:
+            print(f"❌ {ticker}: NO EARNINGS DATA")
+            continue
+
+        print(f"✅ {ticker}: earnings date = {data.get('earnings_date')}")
+
+        if report_mode == "today":
+            earnings_date = data.get("earnings_date")
+            if earnings_date != today:
+                print(f"⏭️ {ticker}: did not report today → skipping")
+                continue
+            print(f"🚨 {ticker}: REPORTED TODAY → adding to report")
+        else:
+            print(f"📈 {ticker}: adding to manual ALL report")
+
+        reports.append(data)   # <-- add to the list
+
+    # ------------- AFTER BUILDING REPORTS -------------
+    print()
+    print("=" * 60)
+    print(f"TOTAL REPORTS: {len(reports)}")
+    print("=" * 60)
 
     if not reports:
         print("❌ No companies matched the report criteria.")
@@ -643,6 +685,3 @@ def main():
         print("🎉 All earnings reports sent successfully.")
     else:
         print("⚠️ Some earnings reports failed to send.")
-
-if __name__ == "__main__":
-    main()
