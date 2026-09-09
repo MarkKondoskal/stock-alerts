@@ -528,41 +528,53 @@ def format_earnings_table(data):
 # Discord
 # -----------------------------------------------------------------------------
 
-def post_to_discord(description):
+def post_to_discord(description, color=3447003):
     if not WEBHOOK_URL:
-        print("ERROR: DISCORD_PORTFOLIO_WEBHOOK not set.")
+        print("❌ ERROR: DISCORD_PORTFOLIO_WEBHOOK is not set.")
+        print("Check GitHub Settings → Secrets and variables → Actions.")
         return False
+
+    print("🔎 Discord webhook variable is present.")
+    print(f"Message length: {len(description)} characters")
 
     payload = {
         "username": "Earnings Bot",
-        "embeds": [
-            {
-                "title": "📈 Portfolio Earnings Highlights",
-                "description": description,
-                "color": 3447003,
-            }
-        ],
+        "embeds": [{
+            "title": "📈 Portfolio Earnings Highlights",
+            "description": description,
+            "color": color
+        }]
     }
 
     try:
-
         response = requests.post(
             WEBHOOK_URL,
             json=payload,
-            timeout=15,
+            timeout=15
         )
 
-        response.raise_for_status()
+        print(f"Discord HTTP status: {response.status_code}")
 
-        print("Earnings report sent to Discord.")
+        if response.status_code >= 200 and response.status_code < 300:
+            print("✅ Earnings report successfully sent to Discord.")
+            return True
 
-        return True
-
-    except Exception as e:
-        print(f"Discord error: {e}")
+        print("❌ Discord rejected the webhook.")
+        print(f"Response: {response.text}")
 
         return False
 
+    except requests.exceptions.Timeout:
+        print("❌ Discord request timed out.")
+        return False
+
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Discord request failed: {e}")
+        return False
+
+    except Exception as e:
+        print(f"❌ Unexpected Discord error: {e}")
+        return False
 
 # -----------------------------------------------------------------------------
 # Main
