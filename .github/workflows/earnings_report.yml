@@ -1,9 +1,19 @@
 name: Portfolio Earnings Report
 
 on:
-  workflow_dispatch:          # allows manual trigger
+  workflow_dispatch:
+    inputs:
+      report_mode:
+        description: "What earnings report should be generated?"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - today
+
   schedule:
-    - cron: '0 14 * * *'      # optional: runs daily at 14:00 UTC (adjust as needed)
+    - cron: '0 * * * *'
 
 jobs:
   earnings:
@@ -26,5 +36,6 @@ jobs:
       - name: Run Earnings Report
         env:
           DISCORD_PORTFOLIO_WEBHOOK: ${{ secrets.DISCORD_PORTFOLIO_WEBHOOK }}
+          REPORT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.report_mode || 'today' }}
         run: |
           python portfolio/earnings_report.py
