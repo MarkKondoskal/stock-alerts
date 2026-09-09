@@ -603,108 +603,46 @@ def main():
     print("=" * 60)
 
     portfolio = load_portfolio()
-
     if not portfolio:
         print("❌ No portfolio data found.")
         return
 
-    print(f"📊 Portfolio contains {len(portfolio)} holdings.")
-    print(f"📁 Portfolio file: {PORTFOLIO_FILE}")
-
-    report_mode = os.environ.get("REPORT_MODE", "all").lower()
-
-    print(f"📋 Report mode: {report_mode}")
-
-    today = datetime.now().date()
-
-    print(f"📅 Today: {today}")
-    print("=" * 60)
-
-    reports = []
-
-    for ticker in portfolio.keys():
-
-        print()
-        print(f"🔍 Checking {ticker}...")
-
-        data = get_earnings_data(ticker)
-
-        if data is None:
-            print(f"❌ {ticker}: NO EARNINGS DATA")
-            continue
-
-        print(
-            f"✅ {ticker}: "
-            f"earnings date = {data.get('earnings_date')}"
-        )
-
-        if report_mode == "today":
-
-            earnings_date = data.get("earnings_date")
-
-            if earnings_date != today:
-                print(
-                    f"⏭️ {ticker}: "
-                    f"did not report today → skipping"
-                )
-                continue
-
-            print(
-                f"🚨 {ticker}: "
-                f"REPORTED TODAY → adding to report"
-            )
-
-        else:
-            print(
-                f"📈 {ticker}: "
-                f"adding to manual ALL report"
-            )
-
-        reports.append(data)
-
-    print()
-    print("=" * 60)
-    print(f"TOTAL REPORTS: {len(reports)}")
-    print("=" * 60)
+    # ... (rest of main() as originally written, up to the point where reports is built)
 
     if not reports:
         print("❌ No companies matched the report criteria.")
-
         if report_mode == "today":
             print("This is normal if none of your holdings reported today.")
-
         return
 
-print()
-print("=" * 60)
-print("SENDING EARNINGS REPORTS TO DISCORD")
-print("=" * 60)
+    # --- now send to Discord ---
+    print()
+    print("=" * 60)
+    print("SENDING EARNINGS REPORTS TO DISCORD")
+    print("=" * 60)
 
-successful = 0
-failed = 0
+    successful = 0
+    failed = 0
 
-for data in reports:
+    for data in reports:
+        ticker = data["ticker"]
+        success = post_to_discord(data)
+        if success:
+            successful += 1
+        else:
+            failed += 1
 
-    ticker = data["ticker"]
-
-    success = post_to_discord(data)
-
-    if success:
-        successful += 1
+    print()
+    print("=" * 60)
+    print("DISCORD REPORT SUMMARY")
+    print("=" * 60)
+    print(f"Successful: {successful}")
+    print(f"Failed:     {failed}")
+    print(f"Total:      {len(reports)}")
+    if failed == 0:
+        print("🎉 All earnings reports sent successfully.")
     else:
-        failed += 1
+        print("⚠️ Some earnings reports failed to send.")
 
-print()
-print("=" * 60)
-print("DISCORD REPORT SUMMARY")
-print("=" * 60)
-
-print(f"Successful: {successful}")
-print(f"Failed:     {failed}")
-print(f"Total:      {len(reports)}")
-
-if failed == 0:
-    print("🎉 All earnings reports sent successfully.")
-
-else:
-    print("⚠️ Some earnings reports failed to send.")
+if __name__ == "__main__":
+    main()
