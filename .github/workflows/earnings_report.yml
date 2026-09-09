@@ -37,5 +37,8 @@ jobs:
         env:
           DISCORD_PORTFOLIO_WEBHOOK: ${{ secrets.DISCORD_PORTFOLIO_WEBHOOK }}
           REPORT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.report_mode || 'today' }}
+          PYTHONUNBUFFERED: 1    # <--- forces unbuffered output
         run: |
-          python portfolio/earnings_report.py
+          echo "=== WORKFLOW START ==="
+          python -u portfolio/earnings_report.py
+          echo "=== WORKFLOW END ==="
