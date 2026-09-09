@@ -393,7 +393,7 @@ def format_earnings_table(data):
     lines.append(
     f"*Reported: {data['earnings_date'].strftime('%Y-%m-%d')}*"
     )
-    )
+    
 
     lines.append("```")
 
