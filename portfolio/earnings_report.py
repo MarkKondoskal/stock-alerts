@@ -359,15 +359,6 @@ def main():
 
     reports = []
 
-    # --- TEST WITH AAPL FIRST (temporarily) ---
-    print("\n--- TEST: AAPL ---", flush=True)
-    aapl_data = get_earnings_data("AAPL")
-    if aapl_data:
-        print("✅ AAPL data fetched", flush=True)
-        post_to_discord(aapl_data)
-    else:
-        print("❌ AAPL returned None", flush=True)
-
     # --- Process portfolio ---
     print("\n--- PROCESSING PORTFOLIO ---", flush=True)
     for ticker in portfolio.keys():
