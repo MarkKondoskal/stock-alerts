@@ -581,95 +581,97 @@ def post_to_discord(description, color=3447003):
 # -----------------------------------------------------------------------------
 
 def main():
+    print("=" * 60)
+    print("PORTFOLIO EARNINGS REPORT")
+    print("=" * 60)
 
     portfolio = load_portfolio()
 
     if not portfolio:
-        print("No portfolio data found.")
+        print("❌ No portfolio data found.")
         return
 
-    # GitHub Actions can provide:
-    #
-    #   REPORT_MODE=all
-    #
-    # or
-    #
-    #   REPORT_MODE=today
-    #
+    print(f"📊 Portfolio contains {len(portfolio)} holdings.")
+    print(f"📁 Portfolio file: {PORTFOLIO_FILE}")
+
     report_mode = os.environ.get("REPORT_MODE", "all").lower()
 
-    today = date.today()
+    print(f"📋 Report mode: {report_mode}")
+
+    today = datetime.now().date()
+
+    print(f"📅 Today: {today}")
+    print("=" * 60)
 
     reports = []
 
     for ticker in portfolio.keys():
 
-        print(f"Checking {ticker}...")
+        print()
+        print(f"🔍 Checking {ticker}...")
 
         data = get_earnings_data(ticker)
 
         if data is None:
-            print(f"{ticker}: no earnings data found.")
+            print(f"❌ {ticker}: NO EARNINGS DATA")
             continue
 
-        data = add_eps_changes(ticker, data)
-
-        earnings_date = data["earnings_date"]
-
         print(
-            f"{ticker}: latest earnings = "
-            f"{earnings_date}"
+            f"✅ {ticker}: "
+            f"earnings date = {data.get('earnings_date')}"
         )
 
-        # ---------------------------------------------------------------------
-        # AUTOMATIC MODE
-        #
-        # Only include companies whose latest earnings report is TODAY.
-        # ---------------------------------------------------------------------
-
         if report_mode == "today":
+
+            earnings_date = data.get("earnings_date")
 
             if earnings_date != today:
                 print(
-                    f"{ticker}: not reported today -> skipping."
+                    f"⏭️ {ticker}: "
+                    f"did not report today → skipping"
                 )
                 continue
 
-        # ---------------------------------------------------------------------
-        # MANUAL MODE
-        #
-        # Include every portfolio company.
-        # ---------------------------------------------------------------------
+            print(
+                f"🚨 {ticker}: "
+                f"REPORTED TODAY → adding to report"
+            )
+
+        else:
+            print(
+                f"📈 {ticker}: "
+                f"adding to manual ALL report"
+            )
 
         reports.append(data)
 
-    # -------------------------------------------------------------------------
-    # Nothing to report
-    # -------------------------------------------------------------------------
+    print()
+    print("=" * 60)
+    print(f"TOTAL REPORTS: {len(reports)}")
+    print("=" * 60)
 
     if not reports:
+        print("❌ No companies matched the report criteria.")
 
         if report_mode == "today":
-            print("No portfolio companies reported earnings today.")
-            return
+            print("This is normal if none of your holdings reported today.")
 
-        print("No earnings data available.")
         return
-
-    # -------------------------------------------------------------------------
-    # Build Discord message
-    # -------------------------------------------------------------------------
 
     description = ""
 
     for data in reports:
+        description += format_earnings_table(data)
+        description += "\n\n"
 
-        description += (
-            format_earnings_table(data)
-            + "\n\n"
-        )
+    print(f"📨 Discord message length: {len(description)} characters")
 
-    post_to_discord(description)
+    success = post_to_discord(description)
+
+    if success:
+        print("🎉 Earnings workflow completed successfully.")
+    else:
+        print("💥 Earnings workflow completed WITHOUT Discord delivery.")
 
 
 if __name__ == "__main__":
