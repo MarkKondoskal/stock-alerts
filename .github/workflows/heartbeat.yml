@@ -3,7 +3,8 @@ name: Daily Heartbeat
 on:
   schedule:
     # 13:30 UTC = 15:30 Denmark time (CEST)
-    - cron: '30 13 * * 1-5'
+    - cron: '30 9 * * 1-5'
+      timezone: "America/New_York"
   # workflow_dispatch:   # <-- removed to prevent manual runs
 
 jobs:
