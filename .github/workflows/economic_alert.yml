@@ -3,8 +3,7 @@ name: US Economic Data Monitor
 on:
   schedule:
     # Runs at 13:30 UTC, Monday–Friday (covers US morning releases)
-    - cron: '*/15 7-20 * * 1-5'
-    - cron: '0 21 * * 1-5'
+    - cron: '0 * * * 1-5'
   workflow_dispatch:  # allows manual testing
 
 jobs:
