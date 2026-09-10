@@ -1,7 +1,7 @@
 import os
 import json
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 
 # ------------------------------------------------------------
 # Configuration
@@ -12,6 +12,7 @@ FRED_API_KEY = os.environ.get("FRED_API_KEY")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(BASE_DIR, "economic_state.json")
 
+# FRED series monitored by the economic-data workflow.
 SERIES = {
     "UNRATE": "Unemployment Rate",
     "CPIAUCSL": "CPI (All Urban Consumers)",
@@ -24,184 +25,443 @@ SERIES = {
 }
 
 # ------------------------------------------------------------
-# Helpers
+# State handling
 # ------------------------------------------------------------
 
 def load_state():
+    """Load the last FRED observation stored for each series."""
     try:
-        with open(STATE_FILE, "r") as f:
+        with open(STATE_FILE, "r", encoding="utf-8") as f:
             state = json.load(f)
-            if not isinstance(state, dict):
-                raise ValueError("State file is not a dict")
-            return state
-    except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
-        print(f"⚠️ Loading state: {e}. Starting fresh.")
+
+        if not isinstance(state, dict):
+            raise ValueError("State file must contain a JSON object")
+
+        return state
+
+    except FileNotFoundError:
+        print(
+            "ℹ️ No economic_state.json found. "
+            "The next successful run will initialize it without sending alerts."
+        )
         return {}
 
+    except (json.JSONDecodeError, OSError, ValueError) as e:
+        print(f"⚠️ Could not load economic state: {e}. Starting with empty state.")
+        return {}
+
+
 def save_state(state):
-    """Atomic write to avoid corruption."""
+    """Atomically save economic state so a partial write cannot corrupt the file."""
     tmp_file = STATE_FILE + ".tmp"
+
     try:
-        with open(tmp_file, "w") as f:
+        with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(state, f, indent=2)
             f.write("\n")
+
         os.replace(tmp_file, STATE_FILE)
+        return True
+
     except OSError as e:
-        print(f"❌ Error saving state: {e}")
-        # Clean up temp file if it exists
-        if os.path.exists(tmp_file):
-            os.remove(tmp_file)
+        print(f"❌ Error saving economic state: {e}")
+
+        try:
+            if os.path.exists(tmp_file):
+                os.remove(tmp_file)
+        except OSError:
+            pass
+
+        return False
+
+
+# ------------------------------------------------------------
+# FRED
+# ------------------------------------------------------------
 
 def fetch_fred_data(series_id, limit=2):
+    """Return the newest usable FRED observations as (date, value)."""
     if not FRED_API_KEY:
-        print("Error: FRED_API_KEY is missing.")
+        print("❌ FRED_API_KEY is missing.")
         return []
-    url = (
-        f"https://api.stlouisfed.org/fred/series/observations"
-        f"?series_id={series_id}"
-        f"&api_key={FRED_API_KEY}"
-        f"&file_type=json"
-        f"&sort_order=desc"
-        f"&limit={limit}"
-    )
+
+    url = "https://api.stlouisfed.org/fred/series/observations"
+
+    params = {
+        "series_id": series_id,
+        "api_key": FRED_API_KEY,
+        "file_type": "json",
+        "sort_order": "desc",
+        "limit": limit,
+    }
+
     try:
-        resp = requests.get(url, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+
+        data = response.json()
         observations = data.get("observations", [])
+
         result = []
-        for obs in observations:
-            value_str = obs.get("value")
-            if value_str is None or value_str == ".":
+
+        for observation in observations:
+            date = observation.get("date")
+            value_str = observation.get("value")
+
+            if not date or value_str in (None, "."):
                 continue
-            result.append((obs.get("date"), float(value_str)))
+
+            try:
+                value = float(value_str)
+            except (TypeError, ValueError):
+                continue
+
+            result.append((date, value))
+
         return result
-    except Exception as e:
-        print(f"Error fetching {series_id}: {e}")
+
+    except (requests.RequestException, ValueError, TypeError) as e:
+        print(f"❌ Error fetching {series_id}: {e}")
         return []
+
+
+# ------------------------------------------------------------
+# Formatting
+# ------------------------------------------------------------
 
 def should_show_percent(series_name):
     keywords = ["Rate", "Unemployment", "Growth"]
-    return any(kw in series_name for kw in keywords)
+    return any(keyword in series_name for keyword in keywords)
+
 
 def format_change(current, previous):
     if previous is None:
         return "N/A"
-    diff = current - previous
-    arrow = "🟢" if diff > 0 else "🔴" if diff < 0 else "⚪"
-    return f"{arrow} {diff:+.2f}"
+
+    difference = current - previous
+
+    icon = (
+        "🟢"
+        if difference > 0
+        else "🔴"
+        if difference < 0
+        else "⚪"
+    )
+
+    return f"{icon} {difference:+.2f}"
+
+
+# ------------------------------------------------------------
+# Discord
+# ------------------------------------------------------------
 
 def send_discord_alert(series_name, date, current, previous):
+    """Send one Discord message for one changed economic series."""
+
     if not WEBHOOK_URL:
-        print("Error: Discord webhook not configured.")
-        return
+        print("❌ Discord economic webhook is not configured.")
+        return False
 
     is_percent = should_show_percent(series_name)
 
     if is_percent:
         current_str = f"{current:.2f}%"
-        prev_str = f"{previous:.2f}%" if previous is not None else "N/A"
-        change_str = format_change(current, previous) if previous is not None else "N/A"
+        previous_str = (
+            f"{previous:.2f}%"
+            if previous is not None
+            else "N/A"
+        )
+
     elif "Claims" in series_name or "Payrolls" in series_name:
         current_str = f"{current:,.0f}"
-        prev_str = f"{previous:,.0f}" if previous is not None else "N/A"
-        change_str = format_change(current, previous) if previous is not None else "N/A"
+        previous_str = (
+            f"{previous:,.0f}"
+            if previous is not None
+            else "N/A"
+        )
+
     else:
         current_str = f"{current:,.2f}"
-        prev_str = f"{previous:,.2f}" if previous is not None else "N/A"
-        change_str = format_change(current, previous) if previous is not None else "N/A"
+        previous_str = (
+            f"{previous:,.2f}"
+            if previous is not None
+            else "N/A"
+        )
+
+    change_str = (
+        format_change(current, previous)
+        if previous is not None
+        else "N/A"
+    )
 
     note = ""
+
     if "GDP" in series_name:
         note = "\n*(Quarter-over-quarter, annualized)*"
+
     elif "Fed Funds" in series_name:
         note = "\n*(Federal Reserve target range)*"
 
     payload = {
-        "username": "Sentiment Man",
+        "username": "Economic Data Monitor",
         "embeds": [
             {
                 "title": f"📊 {series_name}",
-                "description": f"**Latest Release:** {date}{note}",
+                "description": (
+                    f"**Latest Release:** {date}"
+                    f"{note}"
+                ),
                 "color": 3447003,
                 "fields": [
-                    {"name": "Current", "value": current_str, "inline": True},
-                    {"name": "Previous", "value": prev_str, "inline": True},
-                    {"name": "Change", "value": change_str, "inline": True},
-                    {"name": "Data Source", "value": "FRED (Federal Reserve)", "inline": False}
+                    {
+                        "name": "Current",
+                        "value": current_str,
+                        "inline": True,
+                    },
+                    {
+                        "name": "Previous",
+                        "value": previous_str,
+                        "inline": True,
+                    },
+                    {
+                        "name": "Change",
+                        "value": change_str,
+                        "inline": True,
+                    },
+                    {
+                        "name": "Data Source",
+                        "value": "FRED (Federal Reserve)",
+                        "inline": False,
+                    },
                 ],
-                "footer": {"text": "Economic Data Monitor"},
-                "timestamp": datetime.utcnow().isoformat()
+                "footer": {
+                    "text": "Economic Data Monitor"
+                },
+                "timestamp": datetime.now(
+                    timezone.utc
+                ).isoformat(),
             }
-        ]
+        ],
     }
 
     try:
-        requests.post(WEBHOOK_URL, json=payload, timeout=15)
+        response = requests.post(
+            WEBHOOK_URL,
+            json=payload,
+            timeout=15,
+        )
+
+        response.raise_for_status()
+
         print(f"✅ Alert sent for {series_name}")
-    except Exception as e:
-        print(f"❌ Failed to send Discord alert: {e}")
+        return True
+
+    except requests.RequestException as e:
+        print(
+            f"❌ Failed to send Discord alert "
+            f"for {series_name}: {e}"
+        )
+        return False
+
 
 # ------------------------------------------------------------
 # Main
 # ------------------------------------------------------------
 
 def main():
+
     if not FRED_API_KEY:
-        print("Error: FRED_API_KEY environment variable not set. Exiting.")
+        print(
+            "❌ FRED_API_KEY environment variable "
+            "not set. Exiting."
+        )
         return
 
     state = load_state()
-    print(f"📂 Loaded state with {len(state)} series entries.")
 
-    updated_series = []   # track which series we actually updated
+    print(
+        f"📂 Loaded state with "
+        f"{len(state)} series entries."
+    )
+
+    state_changed = False
+
+    alerts_sent = []
+    initialized = []
 
     for series_id, name in SERIES.items():
-        observations = fetch_fred_data(series_id, limit=2)
-        if len(observations) == 0:
-            print(f"⚠️ No data for {name} ({series_id}) – skipping")
+
+        observations = fetch_fred_data(
+            series_id,
+            limit=2,
+        )
+
+        if not observations:
+            print(
+                f"⚠️ No data for {name} "
+                f"({series_id}) – skipping"
+            )
             continue
 
         latest_date, latest_value = observations[0]
-        previous_value = observations[1][1] if len(observations) > 1 else None
 
-        last_entry = state.get(series_id, {})
+        previous_value = (
+            observations[1][1]
+            if len(observations) > 1
+            else None
+        )
+
+        last_entry = state.get(series_id)
+
+        # ----------------------------------------------------
+        # First observation for this series
+        #
+        # Establish a baseline.
+        # DO NOT send an alert.
+        # ----------------------------------------------------
+
+        if (
+            not isinstance(last_entry, dict)
+            or last_entry.get("date") is None
+        ):
+
+            state[series_id] = {
+                "date": latest_date,
+                "value": latest_value,
+            }
+
+            state_changed = True
+            initialized.append(name)
+
+            print(
+                f"🟦 {name}: initialized at "
+                f"{latest_date} = {latest_value} "
+                f"(no alert)"
+            )
+
+            continue
+
         last_date = last_entry.get("date")
         last_value = last_entry.get("value")
 
-        # --- Determine if this is a new observation ---
-        is_new = False
-        reason = ""
+        # ----------------------------------------------------
+        # Detect ONLY this series changing.
+        # ----------------------------------------------------
 
-        if last_date is None:
-            is_new = True
-            reason = "first time seeing this series"
-        elif latest_date > last_date:
-            is_new = True
-            reason = f"newer date ({latest_date} > {last_date})"
-        elif latest_date == last_date and latest_value != last_value:
-            is_new = True
-            reason = f"revision on same date (value changed from {last_value} to {latest_value})"
+        if latest_date > last_date:
+
+            reason = (
+                f"new release "
+                f"({latest_date} > {last_date})"
+            )
+
+            changed = True
+
+        elif (
+            latest_date == last_date
+            and latest_value != last_value
+        ):
+
+            reason = (
+                f"revision "
+                f"({last_value} → {latest_value})"
+            )
+
+            changed = True
+
         else:
-            reason = "no change (date and value match stored)"
 
-        print(f"🔍 {name}: {reason}")
+            reason = "no change"
+            changed = False
 
-        if is_new:
-            print(f"📢 Sending alert for {name} – {latest_date} = {latest_value}")
-            send_discord_alert(name, latest_date, latest_value, previous_value)
-            # Update state
-            state[series_id] = {"date": latest_date, "value": latest_value}
-            updated_series.append(name)
+        print(
+            f"🔍 {name}: {reason}"
+        )
+
+        if not changed:
+            continue
+
+        # ----------------------------------------------------
+        # IMPORTANT:
+        #
+        # Only update state AFTER Discord successfully
+        # receives the alert.
+        #
+        # If Discord fails, this indicator will be retried
+        # during the next workflow run.
+        # ----------------------------------------------------
+
+        if send_discord_alert(
+            name,
+            latest_date,
+            latest_value,
+            previous_value,
+        ):
+
+            state[series_id] = {
+                "date": latest_date,
+                "value": latest_value,
+            }
+
+            state_changed = True
+            alerts_sent.append(name)
+
         else:
-            print(f"⏩ No alert for {name}")
 
-    # Save state if anything changed
-    if updated_series:
-        save_state(state)
-        print(f"✅ Updated state file with {len(updated_series)} indicator(s): {', '.join(updated_series)}")
+            print(
+                f"⚠️ State NOT updated for {name}; "
+                f"it will be retried next run."
+            )
+
+    # --------------------------------------------------------
+    # Persist state
+    # --------------------------------------------------------
+
+    if state_changed:
+
+        if save_state(state):
+            print(
+                f"💾 Economic state saved: "
+                f"{len(state)} series tracked."
+            )
+
     else:
-        print("ℹ️ No new economic data released since last check.")
+
+        print(
+            "ℹ️ No economic state changes."
+        )
+
+    # --------------------------------------------------------
+    # Summary
+    # --------------------------------------------------------
+
+    print(
+        "--- Economic monitor summary ---"
+    )
+
+    print(
+        f"Initialized without alerts: "
+        f"{len(initialized)}"
+    )
+
+    print(
+        f"Alerts sent: "
+        f"{len(alerts_sent)}"
+    )
+
+    if alerts_sent:
+
+        print(
+            "Changed series: "
+            + ", ".join(alerts_sent)
+        )
+
+    else:
+
+        print(
+            "No new/revised economic data detected."
+        )
+
 
 if __name__ == "__main__":
     print("Checking US economic data...")
