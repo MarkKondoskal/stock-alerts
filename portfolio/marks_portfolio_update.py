@@ -83,12 +83,33 @@ def save_portfolio(portfolio):
 # -----------------------------------------------------------------------------
 
 def compute_cost_basis(transactions):
-    total = 0.0
-    for t in transactions:
-        if t.get("action") == "BUY":
-            total += t["shares"] * t["price"]
-    return total
+    """
+    Calculate the share-weighted cost basis.
+    Accurately tracks the average price and sums the cost of sold shares,
+    rather than blindly summing all BUYs.
+    """
+    shares = 0
+    avg_price = 0.0
+    realized_cost_basis = 0.0
 
+    for t in transactions:
+        action = t.get("action")
+        s = t.get("shares", 0)
+        p = t.get("price", 0.0)
+
+        if action == "BUY":
+            new_shares = shares + s
+            if new_shares > 0:
+                avg_price = ((shares * avg_price) + (s * p)) / new_shares
+            shares = new_shares
+        elif action == "SELL":
+            realized_cost_basis += s * avg_price
+            shares -= s
+            if shares <= 0:
+                shares = 0
+                avg_price = 0.0
+
+    return realized_cost_basis
 
 # -----------------------------------------------------------------------------
 # Fetch current values
@@ -210,15 +231,27 @@ def post_status_summary():
 
     # Total return including closed positions
     closed_positions = portfolio.get("closed_positions", [])
-    total_realized_closed = sum(pos.get("total_realized_pl", 0) for pos in closed_positions)
-    total_cost_closed = sum(pos.get("total_cost_basis", 0) for pos in closed_positions)
-    total_cost_all = total_cost_open + total_cost_closed
+    
+    # Start with realized P&L and cost basis from fully closed positions
+    total_realized_all = sum(pos.get("total_realized_pl", 0.0) for pos in closed_positions)
+    total_cost_all = sum(pos.get("total_cost_basis", 0.0) for pos in closed_positions)
+    
+    # Add Realized P&L and Cost Basis from partially sold (but still open) positions
+    for ticker, info in portfolio.items():
+        if ticker == "closed_positions":
+            continue
+        total_realized_all += info.get("realized_pl", 0.0)
+        partial_sold_basis = compute_cost_basis(info.get("transactions", []))
+        total_cost_all += partial_sold_basis
+
+    # Add the cost basis of currently open shares
+    total_cost_all += total_cost_open
+    
     total_unrealized = total_val - total_cost_open
-    total_return_pct = ((total_unrealized + total_realized_closed) / total_cost_all * 100) if total_cost_all > 0 else 0
+    total_return_pct = ((total_unrealized + total_realized_all) / total_cost_all * 100) if total_cost_all > 0 else 0
 
     description = f"**Lifetime Return:** {total_return_pct:+.1f}%\n\n{table}"
     post_to_discord("📊 MARKS PORTFOLIO", description, color=3447003, chart_path=chart_path)
-
 
 # -----------------------------------------------------------------------------
 # BUY / SELL

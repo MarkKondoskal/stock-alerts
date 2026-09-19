@@ -130,8 +130,8 @@ def main():
         print("Actions: ADD, REMOVE, REMOVE_ALL, LIST, STATUS")
         sys.exit(1)
 
-    action = sys.argv[1].upper()
-    ticker = sys.argv[2].upper() if len(sys.argv) > 2 else None
+    action = sys.argv[1].strip().upper()
+    ticker = sys.argv[2].strip().upper() if len(sys.argv) > 2 else None
     target = float(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] else None
 
     if action == "ADD":
