@@ -1,34 +1,39 @@
 {
-  "UNRATE": {
-    "date": "2026-08-01",
-    "value": 4.1
-  },
-  "CPIAUCSL": {
-    "date": "2026-08-01",
-    "value": 334.131
-  },
-  "A191RL1Q225SBEA": {
-    "date": "2026-04-01",
-    "value": 1.5
-  },
-  "PCEPI": {
-    "date": "2026-07-01",
-    "value": 131.659
-  },
-  "PAYEMS": {
-    "date": "2026-08-01",
-    "value": 159075.0
-  },
-  "ICSA": {
-    "date": "2026-09-05",
-    "value": 206000.0
-  },
-  "DFEDTARU": {
-    "date": "2026-09-11",
-    "value": 3.75
-  },
-  "DFEDTARL": {
-    "date": "2026-09-11",
-    "value": 3.5
-  }
+    "A191RL1Q225SBEA": {
+        "date": "2026-04-01",
+        "value": 1.5
+    },
+    "CPIAUCSL": {
+        "date": "2026-08-01",
+        "value": 334.131
+    },
+    "DFEDTARL": {
+        "date": "2026-09-15",
+        "value": 3.5
+    },
+    "DFEDTARU": {
+        "date": "2026-09-15",
+        "value": 3.75
+    },
+    "FED_FUNDS_TARGET_RANGE": {
+        "date": "2026-09-15",
+        "lower": 3.5,
+        "upper": 3.75
+    },
+    "ICSA": {
+        "date": "2026-09-12",
+        "value": 196000.0
+    },
+    "PAYEMS": {
+        "date": "2026-08-01",
+        "value": 159075.0
+    },
+    "PCEPI": {
+        "date": "2026-07-01",
+        "value": 131.659
+    },
+    "UNRATE": {
+        "date": "2026-08-01",
+        "value": 4.1
+    }
 }
