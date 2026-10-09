@@ -1,5 +1,7 @@
 {
-  "vix": {},
+  "vix": {
+    "down_15": "2026-10-09"
+  },
   "fear_greed_state": "normal",
-  "vix_last_price": 15.100000381469727
+  "vix_last_price": 14.829999923706055
 }
