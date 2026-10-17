@@ -1,107 +1,204 @@
 {
-  "RDW": [
-    8.0
-  ],
-  "GOOG": [
-    300.0
-  ],
-  "AMKR": [
-    38.5
-  ],
-  "CRDO": [
-    130.0,
-    140.0
-  ],
-  "META": [
-    525.0
-  ],
-  "ZETA": [
-    25.0
-  ],
-  "AMZN": [
-    180.0
-  ],
-  "NOK": [
-    9.0
-  ],
-  "MSFT": [
-    370.0
-  ],
-  "VST": [
-    100.0
-  ],
-  "ZAP.OL": [
-    43.0
-  ],
-  "NVDA": [
-    170.0
-  ],
-  "ASML": [
-    1570.0
-  ],
-  "AAOI": [
-    45.0
-  ],
-  "MRVL": [
-    170.0
-  ],
-  "BE": [
-    170.0,
-    180.0
-  ],
-  "SAAB-B.ST": [
-    525.0
-  ],
-  "KOG.OL": [
-    280.0
-  ],
-  "ISRG": [
-    300.0
-  ],
-  "SNOW": [
-    250.0
-  ],
-  "AUTO.OL": [
-    13.0
-  ],
-  "ORCL": [
-    126.0
-  ],
-  "NOW": [
-    90.0
-  ],
-  "PLTR": [
-    145.0
-  ],
-  "RHM.DE": [
-    900.0
-  ],
-  "ASTOR.OL": [
-    10.0
-  ],
-  "SNPS": [
-    340.0
-  ],
-  "AXON": [
-    380.0,
-    385.0
-  ],
-  "ROL": [
-    29.0
-  ],
-  "AVGO": [
-    310.0
-  ],
-  "NU": [
-    12.0
-  ],
-  "MU ": [
-    800.0
-  ],
-  "AVGO ": [
-    315.0
-  ],
-  "FICO": [
-    550.0
-  ]
+  "RDW": {
+    "price_targets": [
+      8.0
+    ],
+    "valuation_targets": {}
+  },
+  "GOOG": {
+    "price_targets": [
+      300.0
+    ],
+    "valuation_targets": {}
+  },
+  "AMKR": {
+    "price_targets": [
+      38.5
+    ],
+    "valuation_targets": {}
+  },
+  "CRDO": {
+    "price_targets": [
+      130.0,
+      140.0
+    ],
+    "valuation_targets": {}
+  },
+  "META": {
+    "price_targets": [
+      525.0
+    ],
+    "valuation_targets": {}
+  },
+  "ZETA": {
+    "price_targets": [
+      25.0
+    ],
+    "valuation_targets": {}
+  },
+  "AMZN": {
+    "price_targets": [
+      180.0
+    ],
+    "valuation_targets": {}
+  },
+  "NOK": {
+    "price_targets": [
+      9.0
+    ],
+    "valuation_targets": {}
+  },
+  "MSFT": {
+    "price_targets": [
+      370.0
+    ],
+    "valuation_targets": {}
+  },
+  "VST": {
+    "price_targets": [
+      100.0
+    ],
+    "valuation_targets": {}
+  },
+  "ZAP.OL": {
+    "price_targets": [
+      43.0
+    ],
+    "valuation_targets": {}
+  },
+  "NVDA": {
+    "price_targets": [
+      170.0
+    ],
+    "valuation_targets": {}
+  },
+  "ASML": {
+    "price_targets": [
+      1570.0
+    ],
+    "valuation_targets": {}
+  },
+  "AAOI": {
+    "price_targets": [
+      45.0
+    ],
+    "valuation_targets": {}
+  },
+  "MRVL": {
+    "price_targets": [
+      170.0
+    ],
+    "valuation_targets": {}
+  },
+  "BE": {
+    "price_targets": [
+      170.0,
+      180.0
+    ],
+    "valuation_targets": {}
+  },
+  "SAAB-B.ST": {
+    "price_targets": [
+      525.0
+    ],
+    "valuation_targets": {}
+  },
+  "KOG.OL": {
+    "price_targets": [
+      280.0
+    ],
+    "valuation_targets": {}
+  },
+  "ISRG": {
+    "price_targets": [
+      300.0
+    ],
+    "valuation_targets": {}
+  },
+  "SNOW": {
+    "price_targets": [
+      250.0
+    ],
+    "valuation_targets": {}
+  },
+  "AUTO.OL": {
+    "price_targets": [
+      13.0
+    ],
+    "valuation_targets": {}
+  },
+  "ORCL": {
+    "price_targets": [
+      126.0
+    ],
+    "valuation_targets": {}
+  },
+  "NOW": {
+    "price_targets": [
+      90.0
+    ],
+    "valuation_targets": {}
+  },
+  "PLTR": {
+    "price_targets": [
+      145.0
+    ],
+    "valuation_targets": {}
+  },
+  "RHM.DE": {
+    "price_targets": [
+      900.0
+    ],
+    "valuation_targets": {}
+  },
+  "ASTOR.OL": {
+    "price_targets": [
+      10.0
+    ],
+    "valuation_targets": {}
+  },
+  "SNPS": {
+    "price_targets": [
+      340.0
+    ],
+    "valuation_targets": {}
+  },
+  "AXON": {
+    "price_targets": [
+      380.0,
+      385.0
+    ],
+    "valuation_targets": {}
+  },
+  "ROL": {
+    "price_targets": [
+      29.0
+    ],
+    "valuation_targets": {}
+  },
+  "AVGO": {
+    "price_targets": [
+      310.0,
+      315.0
+    ],
+    "valuation_targets": {}
+  },
+  "NU": {
+    "price_targets": [
+      12.0
+    ],
+    "valuation_targets": {}
+  },
+  "MU": {
+    "price_targets": [
+      800.0
+    ],
+    "valuation_targets": {}
+  },
+  "FICO": {
+    "price_targets": [
+      550.0
+    ],
+    "valuation_targets": {}
+  }
 }
