@@ -15,6 +15,7 @@ DISCORD_WEBHOOK_URL = (
 )
 METRIC_LABELS = {"PRICE": "PRICE", "FXPE": "FxPE", "PE": "PE", "P/S": "P/S"}
 VALUATION_METRICS = ("FxPE", "PE", "P/S")
+DISPLAY_METRICS = ("PE", "FxPE", "P/S")
 DESCRIPTION_LIMIT = 3500  # Leave room under Discord's 4096-character embed description limit.
 
 
@@ -174,9 +175,7 @@ def _positive_number(value):
 
 
 def get_market_snapshot(ticker):
-    """Fetch price and all three valuation metrics from one ticker info response where possible."""
-    price = None
-    valuations = {metric: None for metric in VALUATION_METRICS}
+    """Fetch price, valuation multiples and YoY revenue growth from one info response."""
     stock = yf.Ticker(ticker)
     info = {}
     try:
@@ -184,13 +183,21 @@ def get_market_snapshot(ticker):
     except Exception as exc:
         print(f"Could not fetch valuation/quote info for {ticker}: {exc}")
 
-    # Yahoo's info response normally includes both current price and these valuation fields.
     price = _positive_number(info.get("currentPrice")) or _positive_number(info.get("regularMarketPrice"))
     valuations = {
         "FxPE": _positive_number(info.get("forwardPE")),
         "PE": _positive_number(info.get("trailingPE")),
         "P/S": _positive_number(info.get("priceToSalesTrailing12Months")),
     }
+
+    # yfinance/Yahoo provides revenueGrowth as a decimal ratio (e.g. 0.12 = +12%).
+    revenue_growth_pct = None
+    try:
+        raw_growth = float(info.get("revenueGrowth"))
+        if math.isfinite(raw_growth):
+            revenue_growth_pct = round(raw_growth * 100, 1)
+    except (TypeError, ValueError):
+        pass
 
     # Fall back to fast_info only when get_info did not supply a usable price.
     if price is None:
@@ -202,20 +209,18 @@ def get_market_snapshot(ticker):
         except Exception as exc:
             print(f"Could not fetch live price for {ticker}: {exc}")
 
-    return (round(price, 2) if price is not None else None), valuations
+    return (round(price, 2) if price is not None else None), valuations, revenue_growth_pct
 
 
-def format_valuations(valuations):
-    parts = []
-    for metric in VALUATION_METRICS:
-        value = valuations.get(metric)
-        parts.append(f"{metric}: {value:.1f}x" if value is not None else f"{metric}: —")
-    return " · ".join(parts)
+def _format_price_target(target):
+    """Keep target cells compact without losing meaningful cents when present."""
+    value = f"{target:.2f}".rstrip("0").rstrip(".")
+    return f"${value}"
 
 
 def _make_embeds(rows, ticker_count):
     """Build an aligned, monospaced table while keeping all tickers in one webhook post."""
-    headers = ["Ticker", "Current", "Targets", "FxPE", "PE", "P/S"]
+    headers = ["Ticker", "Price", "Targets", "PE", "FwdPE", "P/S", "Rev YoY"]
     widths = [
         max(len(headers[i]), *(len(str(row[i])) for row in rows))
         for i in range(len(headers))
@@ -227,7 +232,8 @@ def _make_embeds(rows, ticker_count):
     header_line = format_line(headers)
     separator_line = "-+-".join("-" * width for width in widths)
     formatted_rows = [format_line(row) for row in rows]
-    prefix = "**Watchlist with live prices and valuations**\nTargets include price levels and valuation triggers.\n\n" 
+    prefix = ("**Watchlist · live prices, valuation & revenue growth**\n"
+              "PE = trailing P/E · FwdPE = forward P/E · Rev YoY = year-over-year revenue growth.\n\n")
     descriptions = []
     current_rows = []
 
@@ -275,25 +281,26 @@ def send_watchlist_to_discord():
     rows = []
     for ticker in sorted(data):
         entry = data[ticker]
-        target_parts = [f"${target:.2f}" for target in entry["price_targets"]]
+        target_parts = [_format_price_target(target) for target in entry["price_targets"]]
         for metric in VALUATION_METRICS:
             for target in entry["valuation_targets"].get(metric, []):
                 target_parts.append(f"{metric}≥{target:g}x")
         targets_str = ", ".join(target_parts) if target_parts else "—"
 
-        current_price, valuations = get_market_snapshot(ticker)
+        current_price, valuations, revenue_growth_pct = get_market_snapshot(ticker)
         current_str = f"${current_price:.2f}" if current_price is not None else "N/A"
         valuation_cells = [
             f"{valuations[metric]:.1f}x" if valuations.get(metric) is not None else "—"
-            for metric in VALUATION_METRICS
+            for metric in DISPLAY_METRICS
         ]
-        rows.append([ticker, current_str, targets_str, *valuation_cells])
+        growth_cell = f"{revenue_growth_pct:+.1f}%" if revenue_growth_pct is not None else "—"
+        rows.append([ticker, current_str, targets_str, *valuation_cells, growth_cell])
 
     payload = {"username": "Watchlist Bot", "embeds": _make_embeds(rows, len(data))}
     try:
         response = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=30)
         response.raise_for_status()
-        print("Watchlist with prices and valuations sent to Discord.")
+        print("Watchlist with prices, valuations and revenue growth sent to Discord.")
     except Exception as exc:
         print(f"Failed to send watchlist: {exc}")
 
