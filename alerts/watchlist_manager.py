@@ -214,25 +214,45 @@ def format_valuations(valuations):
 
 
 def _make_embeds(rows, ticker_count):
-    header = "| Ticker | Current | Targets | Valuation |\n|--------|---------|---------|-----------|"
+    """Build an aligned, monospaced table while keeping all tickers in one webhook post."""
+    headers = ["Ticker", "Current", "Targets", "FxPE", "PE", "P/S"]
+    widths = [
+        max(len(headers[i]), *(len(str(row[i])) for row in rows))
+        for i in range(len(headers))
+    ]
+
+    def format_line(values):
+        return " | ".join(str(value).ljust(widths[i]) for i, value in enumerate(values)).rstrip()
+
+    header_line = format_line(headers)
+    separator_line = "-+-".join("-" * width for width in widths)
+    formatted_rows = [format_line(row) for row in rows]
+    prefix = "**Watchlist with live prices and valuations**\nTargets include price levels and valuation triggers.\n\n" 
     descriptions = []
     current_rows = []
-    current_length = len(header) + len("**Watchlist with live prices and valuations**\n\n")
-    for row in rows:
-        extra = len(row) + 1
-        if current_rows and current_length + extra > DESCRIPTION_LIMIT:
-            descriptions.append(header + "\n" + "\n".join(current_rows))
-            current_rows = []
-            current_length = len(header)
-        current_rows.append(row)
-        current_length += extra
+
+    def build_table(table_rows):
+        lines = [header_line, separator_line, *table_rows]
+        return "```text\n" + "\n".join(lines) + "\n```"
+
+    # Keep a single table per embed; if Discord's description limit is reached,
+    # continuation embeds are attached to the same webhook message.
+    for line in formatted_rows:
+        candidate_rows = current_rows + [line]
+        candidate_prefix = prefix if not descriptions else ""
+        candidate = candidate_prefix + build_table(candidate_rows)
+        if current_rows and len(candidate) > DESCRIPTION_LIMIT:
+            descriptions.append((prefix if not descriptions else "") + build_table(current_rows))
+            current_rows = [line]
+        else:
+            current_rows = candidate_rows
+
     if current_rows or not descriptions:
-        descriptions.append(header + "\n" + "\n".join(current_rows))
+        descriptions.append((prefix if not descriptions else "") + build_table(current_rows))
 
     embeds = []
-    for index, table in enumerate(descriptions):
+    for index, description in enumerate(descriptions):
         title = "📋 Current Watchlist" if index == 0 else "📋 Current Watchlist (continued)"
-        description = ("**Watchlist with live prices and valuations**\n\n" if index == 0 else "") + table
         embeds.append({
             "title": title,
             "description": description,
@@ -258,13 +278,16 @@ def send_watchlist_to_discord():
         target_parts = [f"${target:.2f}" for target in entry["price_targets"]]
         for metric in VALUATION_METRICS:
             for target in entry["valuation_targets"].get(metric, []):
-                target_parts.append(f"{metric} ≥ {target:g}x")
+                target_parts.append(f"{metric}≥{target:g}x")
         targets_str = ", ".join(target_parts) if target_parts else "—"
 
         current_price, valuations = get_market_snapshot(ticker)
         current_str = f"${current_price:.2f}" if current_price is not None else "N/A"
-        valuation_str = format_valuations(valuations)
-        rows.append(f"| {ticker} | {current_str} | {targets_str} | {valuation_str} |")
+        valuation_cells = [
+            f"{valuations[metric]:.1f}x" if valuations.get(metric) is not None else "—"
+            for metric in VALUATION_METRICS
+        ]
+        rows.append([ticker, current_str, targets_str, *valuation_cells])
 
     payload = {"username": "Watchlist Bot", "embeds": _make_embeds(rows, len(data))}
     try:
