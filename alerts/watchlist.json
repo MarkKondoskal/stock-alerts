@@ -200,5 +200,13 @@
       550.0
     ],
     "valuation_targets": {}
+  },
+  "MA": {
+    "price_targets": [],
+    "valuation_targets": {
+      "FxPE": [
+        32.0
+      ]
+    }
   }
 }
