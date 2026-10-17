@@ -94,3 +94,125 @@ def list_watchlist():
     data = load_watchlist()
     if not data:
         print("Watchlist is empty.")
+        return
+    for ticker, entry in sorted(data.items()):
+        parts = [f"PRICE: {entry['price_targets']}" ] if entry["price_targets"] else []
+        parts.extend(f"{metric}: {values}" for metric, values in sorted(entry["valuation_targets"].items()))
+        print(f"{ticker}: " + ("; ".join(parts) if parts else "no targets"))
+
+
+def get_current_price(ticker):
+    try:
+        fast_info = yf.Ticker(ticker).fast_info
+        price = getattr(fast_info, "last_price", None) or getattr(fast_info, "lastPrice", None)
+        if price is not None and float(price) > 0:
+            return round(float(price), 2)
+    except Exception as exc:
+        print(f"Could not fetch price for {ticker}: {exc}")
+    return None
+
+
+def get_current_valuations(ticker):
+    """Fetch valuation data only for tickers with valuation targets, limiting Yahoo requests."""
+    try:
+        info = yf.Ticker(ticker).get_info()
+        values = {
+            "FxPE": info.get("forwardPE"),
+            "PE": info.get("trailingPE"),
+            "P/S": info.get("priceToSalesTrailing12Months"),
+        }
+        return {k: float(v) for k, v in values.items()
+                if isinstance(v, (int, float)) and v > 0}
+    except Exception as exc:
+        print(f"Could not fetch valuation data for {ticker}: {exc}")
+        return {}
+
+
+def send_watchlist_to_discord():
+    data = load_watchlist()
+    if not data:
+        print("Watchlist is empty – nothing to send.")
+        return
+    if not DISCORD_WEBHOOK_URL:
+        print("Error: No Discord webhook URL configured.")
+        return
+
+    rows = []
+    for ticker in sorted(data):
+        entry = data[ticker]
+        targets = [f"${x:.2f}" for x in entry["price_targets"]]
+        for metric, values in sorted(entry["valuation_targets"].items()):
+            targets.extend(f"{metric} {x:g}x" if metric != "P/S" else f"P/S {x:g}x" for x in values)
+        targets_str = ", ".join(targets) if targets else "—"
+        current_price = get_current_price(ticker)
+        current_str = f"${current_price:.2f}" if current_price is not None else "N/A"
+
+        valuation_str = "—"
+        if entry["valuation_targets"]:
+            valuations = get_current_valuations(ticker)
+            labels = {"FxPE": "FxPE", "PE": "PE", "P/S": "P/S"}
+            valuation_str = " · ".join(
+                f"{labels[m]}: {valuations[m]:.1f}x" if m in valuations else f"{labels[m]}: N/A"
+                for m in ("FxPE", "PE", "P/S")
+            )
+        rows.append(f"| {ticker} | {current_str} | {targets_str} | {valuation_str} |")
+
+    table_header = "| Ticker | Current | Targets | Valuation |\n|--------|---------|---------|-----------|"
+    table = table_header + "\n" + "\n".join(rows)
+    description = f"**Watchlist with live prices**\n\n{table}"
+    payload = {
+        "username": "Watchlist Bot",
+        "embeds": [{
+            "title": "📋 Current Watchlist",
+            "description": description,
+            "color": 3447003,
+            "footer": {"text": f"{len(data)} tickers monitored"},
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }],
+    }
+    try:
+        response = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=15)
+        response.raise_for_status()
+        print("Watchlist sent to Discord.")
+    except Exception as exc:
+        print(f"Failed to send watchlist: {exc}")
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: python watchlist_manager.py ACTION [TICKER] [TARGET] [METRIC]")
+        sys.exit(1)
+    action = sys.argv[1].upper()
+    ticker = sys.argv[2].strip().upper() if len(sys.argv) > 2 and sys.argv[2] else None
+    target = float(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] else None
+    metric = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else "PRICE"
+    if metric not in METRICS:
+        print(f"Invalid metric {metric}. Choose from {', '.join(sorted(METRICS))}.")
+        sys.exit(1)
+
+    if action == "ADD":
+        if not ticker or target is None or target <= 0:
+            print("ADD requires TICKER and a positive TARGET.")
+            sys.exit(1)
+        add_target(ticker, target, metric)
+    elif action == "REMOVE":
+        if not ticker or target is None:
+            print("REMOVE requires TICKER and TARGET.")
+            sys.exit(1)
+        remove_target(ticker, target, metric)
+    elif action == "REMOVE_ALL":
+        if not ticker:
+            print("REMOVE_ALL requires TICKER.")
+            sys.exit(1)
+        remove_all(ticker)
+    elif action == "LIST":
+        list_watchlist()
+    elif action in ("STATUS", "SEND"):
+        send_watchlist_to_discord()
+    else:
+        print(f"Unknown action: {action}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
