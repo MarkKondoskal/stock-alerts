@@ -15,13 +15,23 @@ on:
           - LIST
           - STATUS
       ticker:
-        description: 'Ticker symbol (e.g., NVDA)'
+        description: 'Ticker symbol (e.g., MA)'
         required: false
         default: ''
       target:
-        description: 'Target price (required for ADD/REMOVE)'
+        description: 'Target value (price in dollars or valuation multiple, e.g. 35)'
         required: false
         default: ''
+      metric:
+        description: 'Metric for ADD/REMOVE'
+        required: true
+        default: 'PRICE'
+        type: choice
+        options:
+          - PRICE
+          - FxPE
+          - PE
+          - P/S
 
 jobs:
   manage-watchlist:
@@ -38,17 +48,16 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install requests yfinance
+        run: pip install requests yfinance
 
       - name: Run watchlist manager
         env:
           ACTION: ${{ github.event.inputs.action }}
           TICKER: ${{ github.event.inputs.ticker }}
           TARGET: ${{ github.event.inputs.target }}
+          METRIC: ${{ github.event.inputs.metric }}
           DISCORD_STOCK_WEBHOOK: ${{ secrets.DISCORD_STOCK_WEBHOOK }}
-        run: |
-          python alerts/watchlist_manager.py "$ACTION" "$TICKER" "$TARGET"
+        run: python alerts/watchlist_manager.py "$ACTION" "$TICKER" "$TARGET" "$METRIC"
 
       - name: Commit & push changes
         if: github.event.inputs.action != 'LIST' && github.event.inputs.action != 'STATUS'
