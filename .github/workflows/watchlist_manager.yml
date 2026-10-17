@@ -19,7 +19,7 @@ on:
         required: false
         default: ''
       target:
-        description: 'Target value (price in dollars or valuation multiple, e.g. 35)'
+        description: 'Target price or valuation multiple (e.g., 35 for 35x)'
         required: false
         default: ''
       metric:
