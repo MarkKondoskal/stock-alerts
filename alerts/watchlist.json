@@ -201,5 +201,11 @@
       40.0
     ],
     "valuation_targets": {}
+  },
+  "VRT": {
+    "price_targets": [
+      200.0
+    ],
+    "valuation_targets": {}
   }
 }
