@@ -219,5 +219,11 @@
       3.15
     ],
     "valuation_targets": {}
+  },
+  "ASTS": {
+    "price_targets": [
+      36.0
+    ],
+    "valuation_targets": {}
   }
 }
