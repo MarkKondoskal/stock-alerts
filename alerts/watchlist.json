@@ -227,5 +227,13 @@
         30.0
       ]
     }
+  },
+  "VRT": {
+    "price_targets": [],
+    "valuation_targets": {
+      "FxPE": [
+        20.0
+      ]
+    }
   }
 }
