@@ -225,5 +225,11 @@
       36.0
     ],
     "valuation_targets": {}
+  },
+  "OUST": {
+    "price_targets": [
+      25.0
+    ],
+    "valuation_targets": {}
   }
 }
