@@ -231,5 +231,13 @@
       25.0
     ],
     "valuation_targets": {}
+  },
+  "LITE": {
+    "price_targets": [],
+    "valuation_targets": {
+      "FxPE": [
+        30.0
+      ]
+    }
   }
 }
