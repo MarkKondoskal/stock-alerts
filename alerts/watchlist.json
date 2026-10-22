@@ -121,12 +121,6 @@
     ],
     "valuation_targets": {}
   },
-  "ORCL": {
-    "price_targets": [
-      126.0
-    ],
-    "valuation_targets": {}
-  },
   "NOW": {
     "price_targets": [
       90.0
@@ -199,12 +193,6 @@
   "AEHR": {
     "price_targets": [
       40.0
-    ],
-    "valuation_targets": {}
-  },
-  "VRT": {
-    "price_targets": [
-      200.0
     ],
     "valuation_targets": {}
   },
