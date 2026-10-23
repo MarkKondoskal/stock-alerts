@@ -1,0 +1,126 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0d10">
+  <title>StockAlerts — Public Portfolio</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <div class="logo">↗</div>
+      <div>
+        <b>StockAlerts</b>
+        <small>Public portfolio · Read-only</small>
+      </div>
+    </div>
+    <div class="topright">
+      <span class="pill good">Public view</span>
+      <button id="refresh" type="button">↻ Refresh</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="view">
+      <div class="heading">
+        <div>
+          <h1>Portfolio Overview</h1>
+          <p>Holdings, allocation percentages and watchlist targets.</p>
+        </div>
+      </div>
+
+      <div class="metrics">
+        <article class="metric">
+          <label>Positions</label>
+          <strong id="position-count">—</strong>
+          <small>Open holdings</small>
+        </article>
+        <article class="metric">
+          <label>Largest allocation</label>
+          <strong id="largest-allocation">—</strong>
+          <small id="largest-ticker">Waiting for data</small>
+        </article>
+        <article class="metric">
+          <label>Watchlist</label>
+          <strong id="watchlist-count">—</strong>
+          <small>Tracked tickers</small>
+        </article>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">
+          <div>
+            <h2>Portfolio allocation</h2>
+            <p id="allocation-note">
+              Allocation percentages are calculated from recorded cost basis.
+            </p>
+          </div>
+        </div>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Ticker</th>
+                <th>Allocation</th>
+                <th>Cost per share</th>
+                <th>Weight</th>
+              </tr>
+            </thead>
+            <tbody id="portfolio-rows">
+              <tr><td colspan="4">Loading portfolio…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">
+          <div>
+            <h2>Watchlist & targets</h2>
+            <p>Public view of configured price and valuation targets.</p>
+          </div>
+        </div>
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Ticker</th>
+                <th>Price targets</th>
+                <th>Forward P/E trim</th>
+                <th>Forward P/E buy</th>
+                <th>P/E trim</th>
+                <th>P/E buy</th>
+                <th>P/S trim</th>
+                <th>P/S buy</th>
+              </tr>
+            </thead>
+            <tbody id="watchlist-rows">
+              <tr><td colspan="8">Loading watchlist…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">
+          <div>
+            <h2>GitHub workflow status</h2>
+            <p>Recent automation runs.</p>
+          </div>
+        </div>
+        <div id="workflow-list" class="workflow-list">
+          <p class="muted">Loading workflow history…</p>
+        </div>
+      </div>
+
+      <p id="last-updated" class="muted"></p>
+      <p id="public-error" class="error"></p>
+    </section>
+  </main>
+
+  <script src="/static/public.js"></script>
+</body>
+</html>

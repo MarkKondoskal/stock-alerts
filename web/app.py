@@ -550,6 +550,194 @@ def discord_test():
         }), 502
 
 
+# ---------------------------------------------------------
+# PUBLIC READ-ONLY DASHBOARD
+# ---------------------------------------------------------
+
+@app.get("/public")
+def public_dashboard():
+    """Serve the public, read-only dashboard."""
+    return send_from_directory(app.static_folder, "public.html")
+
+
+@app.get("/api/public/portfolio")
+def public_portfolio_get():
+    """Return a sanitized portfolio for public viewing."""
+    try:
+        portfolio, _ = get_file(
+            "portfolio/marks_portfolio.json",
+            data=True,
+        )
+
+        if not isinstance(portfolio, dict):
+            return jsonify({"error": "Invalid portfolio data."}), 502
+
+        positions = []
+        total_cost = 0.0
+
+        for ticker, item in portfolio.items():
+            if ticker == "closed_positions" or not isinstance(item, dict):
+                continue
+
+            try:
+                shares = float(item.get("shares", 0) or 0)
+                avg_price = float(item.get("avg_price", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+
+            if shares <= 0 or avg_price < 0:
+                continue
+
+            cost_basis = shares * avg_price
+            total_cost += cost_basis
+
+            # Keep these values server-side; never return them.
+            positions.append({
+                "ticker": str(ticker).upper(),
+                "_cost_basis": cost_basis,
+                "avg_price": avg_price,
+            })
+
+        if total_cost > 0:
+            for position in positions:
+                position["allocation_pct"] = round(
+                    position["_cost_basis"] / total_cost * 100,
+                    2,
+                )
+
+        # Remove the private calculation field before responding.
+        public_positions = [
+            {
+                "ticker": p["ticker"],
+                "avg_price": p["avg_price"],
+                "allocation_pct": p.get("allocation_pct", 0),
+            }
+            for p in positions
+        ]
+
+        public_positions.sort(
+            key=lambda p: p["allocation_pct"],
+            reverse=True,
+        )
+
+        return jsonify({
+            "positions": public_positions,
+            "position_count": len(public_positions),
+            "allocation_basis": "recorded cost basis",
+            "note": (
+                "Allocation percentages are based on recorded cost basis, "
+                "not live market values. Share counts, total invested, "
+                "and dollar-denominated position values are not published."
+            ),
+        })
+
+    except (requests.RequestException, ValueError, KeyError,
+            TypeError, RuntimeError):
+        app.logger.exception("Could not load public portfolio")
+        return jsonify({
+            "error": "Could not load public portfolio data."
+        }), 502
+
+
+@app.get("/api/public/watchlist")
+def public_watchlist_get():
+    """Publish watchlist tickers and targets without write access."""
+    try:
+        watchlist, _ = get_file("alerts/watchlist.json", data=True)
+
+        if not isinstance(watchlist, dict):
+            return jsonify({"error": "Invalid watchlist data."}), 502
+
+        # Explicit allowlist: only ticker names and configured targets.
+        public_watchlist = {}
+
+        for ticker, item in watchlist.items():
+            if not isinstance(item, dict):
+                continue
+
+            price_targets = item.get("price_targets", [])
+            valuation_targets = item.get("valuation_targets", {})
+
+            if not isinstance(price_targets, list):
+                price_targets = []
+
+            if not isinstance(valuation_targets, dict):
+                valuation_targets = {}
+
+            clean_valuation = {}
+            for metric in ("FxPE", "PE", "P/S"):
+                directions = valuation_targets.get(metric, {})
+                if not isinstance(directions, dict):
+                    continue
+
+                clean_directions = {}
+                for direction in ("trim", "buy"):
+                    values = directions.get(direction, [])
+                    if isinstance(values, list):
+                        clean_directions[direction] = [
+                            v for v in values
+                            if isinstance(v, (int, float))
+                            and not isinstance(v, bool)
+                        ]
+
+                if clean_directions:
+                    clean_valuation[metric] = clean_directions
+
+            public_watchlist[str(ticker).upper()] = {
+                "price_targets": [
+                    v for v in price_targets
+                    if isinstance(v, (int, float))
+                    and not isinstance(v, bool)
+                ],
+                "valuation_targets": clean_valuation,
+            }
+
+        return jsonify(public_watchlist)
+
+    except (requests.RequestException, ValueError, KeyError,
+            TypeError, RuntimeError):
+        app.logger.exception("Could not load public watchlist")
+        return jsonify({
+            "error": "Could not load public watchlist data."
+        }), 502
+
+
+@app.get("/api/public/workflows")
+def public_workflows_get():
+    """Publish workflow status and run timestamps only."""
+    try:
+        cfg = config()
+        response = requests.get(
+            api_repo_url("actions/runs"),
+            headers=gh_headers(),
+            params={
+                "branch": cfg["branch"],
+                "per_page": 10,
+            },
+            timeout=20,
+        )
+        response.raise_for_status()
+
+        runs = []
+        for item in response.json().get("workflow_runs", []):
+            runs.append({
+                "name": item.get("name"),
+                "status": item.get("status"),
+                "conclusion": item.get("conclusion"),
+                "created_at": item.get("created_at"),
+                "html_url": item.get("html_url"),
+            })
+
+        return jsonify(runs)
+
+    except (requests.RequestException, ValueError, KeyError, TypeError):
+        app.logger.exception("Could not load public workflow history")
+        return jsonify({
+            "error": "Could not load workflow history."
+        }), 502
+
+
+
 if __name__ == "__main__":
     # Local development only. Use Gunicorn for deployment.
     app.run(
