@@ -1,5 +1,13 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>StockAlerts Core</title><link rel="stylesheet" href="/static/styles.css"></head>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/static/pwa/service-worker.js")
+        .catch((error) => console.error("Service worker registration failed:", error));
+    });
+  }
+</script>
 <body><header class="top"><div class="brand"><div class="logo">↗</div><div><b>StockAlerts Core</b><small>stock-alerts-main · GitHub Actions</small></div></div><div class="topright"><span id="connection" class="pill">Not connected</span><button id="sync">↻ Sync data</button></div></header>
 <nav><button class="tab active" data-tab="overview">Portfolio Overview</button><button class="tab" data-tab="watchlist">Watchlist & Alerts</button><button class="tab" data-tab="workflows">GitHub Workflows</button><button class="tab" data-tab="settings">Settings</button></nav>
 <main><section id="login" class="panel login"><h2>Connect to your repository</h2><p>Enter the dashboard password configured on your server. Your GitHub token and Discord webhook remain server-side.</p><form id="login-form"><input id="password" type="password" placeholder="Dashboard password" required autocomplete="current-password"><button class="primary">Connect</button></form><p id="login-error" class="error"></p></section>
@@ -8,3 +16,8 @@
 <section id="workflows" class="view hidden"><div class="heading"><div><h1>GitHub Workflows</h1><p>Statuses and run history fetched directly from GitHub Actions.</p></div><button id="reload-workflows" class="ghost">Refresh runs</button></div><div class="panel"><div class="dispatch"><label>Run workflow<select id="workflow-select"><option value="stock_checker.yml">Stock & Sentiment Alert Pipeline</option><option value="watchlist_manager.yml">Watchlist Manager</option><option value="earnings_report.yml">Earnings Report</option><option value="economic_alert.yml">Economic Alert</option><option value="heartbeat.yml">Heartbeat</option><option value="portfolio_summary.yml">Portfolio Summary</option></select></label><button id="dispatch" class="primary">▶ Trigger workflow</button></div><div id="workflow-list" class="workflow-list"></div></div></section>
 <section id="settings" class="view hidden"><div class="heading"><div><h1>Settings & connection</h1><p>Connection details and safe operation.</p></div></div><div class="panel settings"><h2>Connected services</h2><div class="setting-row"><div><b>GitHub repository</b><p>Configured server-side with GITHUB_REPOSITORY</p></div><span class="pill">Server-side</span></div><div class="setting-row"><div><b>GitHub Actions</b><p>Read workflow runs and dispatch approved workflows.</p></div><span class="pill">GitHub API</span></div><div class="setting-row"><div><b>Discord</b><p>Test uses the server-side DISCORD_STOCK_WEBHOOK secret.</p></div><span class="pill">Secret protected</span></div><button id="logout" class="ghost">Disconnect this browser</button></div></section>
 <div id="toast" class="toast hidden"></div></main><script src="/static/app.js"></script></body></html>
+<link rel="manifest" href="/static/pwa/manifest.json">
+<meta name="theme-color" content="#0b0d10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="StockAlerts">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
