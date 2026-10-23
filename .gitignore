@@ -1,0 +1,5 @@
+# Local dashboard secrets and Python environment
+web/.env
+web/.venv/
+__pycache__/
+*.py[cod]

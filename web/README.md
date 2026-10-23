@@ -56,3 +56,12 @@ The dashboard currently uses a simple shared password for access. Use a strong u
 - `GET /api/workflows` — recent Actions runs.
 - `POST /api/workflows/dispatch` — dispatch allowlisted workflows.
 - `POST /api/discord/test` — send a real test using `DISCORD_STOCK_WEBHOOK`.
+
+
+## Easy local start on Windows
+
+1. In this `web` folder, copy `.env.example` to `.env` and fill in the settings.
+2. Double-click `Start StockAlerts Dashboard.bat`. It creates a virtual environment if needed, installs dependencies, opens the browser, and starts the server. Keep its window open while using the dashboard.
+3. Never commit `web/.env`; the repository `.gitignore` excludes it. The file contains local plaintext secrets, so protect your Windows account and do not share the file.
+
+The app loads `web/.env` automatically when present. Environment variables already set by the hosting environment take precedence.

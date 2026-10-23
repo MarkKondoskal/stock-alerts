@@ -5,7 +5,11 @@ Never put GitHub tokens or Discord webhooks in browser code.
 import base64, json, os
 from urllib.parse import quote
 import requests
+from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_from_directory
+
+# Load local secrets from web/.env when present. Environment variables already set by the host take precedence.
+load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 API = 'https://api.github.com'
