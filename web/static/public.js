@@ -200,8 +200,14 @@ function renderHoldings(payload) {
 function holdingRow(h) {
     const allocation = Number(h.allocation_pct) || 0;
     const price = h.current_price === null || h.current_price === undefined ? "—" : formatPrice(h.current_price);
-    const gain = h.period_return_pct;
-    const gainText = gain === null || gain === undefined ? "—" : `${gain > 0 ? "+" : ""}${formatNumber(gain)}%`;
+    // Holdings table always shows return against recorded per-share cost,
+    // not the selectable period from the gainers/losers bar chart.
+    const cost = Number(h.cost_per_share ?? h.avg_price);
+    const current = Number(h.current_price);
+    const gain = Number.isFinite(cost) && cost > 0 &&
+        h.current_price !== null && h.current_price !== undefined &&
+        Number.isFinite(current) ? (current / cost - 1) * 100 : null;
+    const gainText = gain === null ? "—" : `${gain > 0 ? "+" : ""}${formatNumber(gain)}%`;
     const gainClass = gain > 0 ? "return-positive" : gain < 0 ? "return-negative" : "";
     return `<tr>
         <td class="public-ticker">${escapeHtml(h.ticker || "—")}</td>
@@ -464,7 +470,7 @@ elements.refreshButton.addEventListener("click", loadDashboard);
 
 activateTab("holdings");
 loadDashboard();
-initializeAnalytics();
+
 
 
 /* -------------------------
@@ -476,8 +482,8 @@ const analyticsCharts = {};
 const analyticsRequests = new Map();
 let performancePeriod = "1M";
 let gainerPeriod = "1M";
+const ALLOCATION_PERIOD = "1M"; // Fixed data source; independent of both chart selectors.
 let lastAllocation = null;
-let lastGainers = null;
 
 const colors = ["#60a5fa", "#34d399", "#fbbf24", "#f472b6", "#a78bfa", "#fb923c",
     "#2dd4bf", "#818cf8", "#f87171", "#bef264", "#38bdf8", "#e879f9"];
@@ -571,7 +577,6 @@ function updateAllocation(info) {
     if (info.holdings?.length) {
         elements.holdingCount.textContent = String(info.holdings.length);
         elements.allocationBasis.textContent = "Market value";
-        document.getElementById("holdingReturnHeader").textContent = `${gainerPeriod} Return`;
         renderHoldings({ positions: info.holdings, position_count: info.holdings.length,
                          allocation_basis: "Market value" });
         if (window.Chart) {
@@ -588,7 +593,6 @@ async function updateGainers() {
     try {
         const info = await analyticsFor(period);
         if (period !== gainerPeriod) return;
-        lastGainers = info;
         const sorted = [...info.gainers].sort((a, b) => b.return_pct - a.return_pct);
         if (!sorted.length) { note.textContent = "No price history available for the selected period."; return; }
         const shown = [...sorted.slice(0, 5), ...sorted.slice(-5).filter(x => !sorted.slice(0, 5).some(y => y.ticker === x.ticker))];
@@ -602,16 +606,26 @@ async function updateGainers() {
               scales: { x: { ticks: { color: "#888", callback: v => `${v}%` }, grid: { color: "#282828" } },
                         y: { ticks: { color: "#bbb" }, grid: { display: false } } } });
         note.textContent = `Top and bottom performers by share-price return (${period}). ${info.missing_tickers?.length ? "Missing prices: " + info.missing_tickers.join(", ") + "." : ""}`;
-        // The unified holdings table uses the same period as the gainers chart.
-        updateAllocation(info);
     } catch (error) {
         note.textContent = `Gainers/losers unavailable: ${error.message}`;
+    }
+}
+
+async function loadFixedAllocation() {
+    try {
+        // Always use the same snapshot source, regardless of either chart's period.
+        const info = await analyticsFor(ALLOCATION_PERIOD);
+        lastAllocation = info;
+        updateAllocation(info);
+    } catch (error) {
+        console.error("Could not load fixed allocation:", error);
     }
 }
 
 function initializeAnalytics() {
     initializePerformanceSelector();
     initializeGainersSelector();
+    loadFixedAllocation();
     updatePerformance();
     updateGainers();
 }
@@ -628,6 +642,10 @@ function initializeGainersSelector() {
 // Refresh also clears short-lived browser request memoization.
 elements.refreshButton.addEventListener("click", () => {
     analyticsRequests.clear();
+    loadFixedAllocation();
     updatePerformance();
     updateGainers();
 });
+
+// Start charts after all analytics constants and functions are defined.
+initializeAnalytics();
