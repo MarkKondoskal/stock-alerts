@@ -464,7 +464,6 @@ elements.refreshButton.addEventListener("click", loadDashboard);
 
 activateTab("holdings");
 loadDashboard();
-initializeAnalytics();
 
 
 /* -------------------------
