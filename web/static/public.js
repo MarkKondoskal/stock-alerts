@@ -1,170 +1,544 @@
 
-const $ = selector => document.querySelector(selector);
+"use strict";
 
-const fmt = (n, digits = 2) =>
-  Number(n || 0).toLocaleString("en-US", {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits
-  });
+const API = {
+    portfolio: "/api/public/portfolio",
+    watchlist: "/api/public/watchlist",
+};
 
-const targetText = values =>
-  Array.isArray(values) && values.length
-    ? values.join(", ")
-    : "—";
+const elements = {
+    holdingsTab: document.getElementById("holdingsTab"),
+    watchlistTab: document.getElementById("watchlistTab"),
+    holdingsPanel: document.getElementById("holdingsPanel"),
+    watchlistPanel: document.getElementById("watchlistPanel"),
 
-const directionTargets = (item, metric, direction) =>
-  targetText(item.valuation_targets?.[metric]?.[direction]);
+    holdingsBody: document.getElementById("holdingsBody"),
+    watchlistBody: document.getElementById("watchlistBody"),
 
-async function getPublicData(path) {
-  const response = await fetch(path, {
-    method: "GET",
-    headers: { Accept: "application/json" },
-    cache: "no-store"
-  });
+    holdingCount: document.getElementById("holdingCount"),
+    allocationBasis: document.getElementById("allocationBasis"),
+    watchlistCount: document.getElementById("watchlistCount"),
 
-  const data = await response.json();
+    refreshButton: document.getElementById("refreshPublic"),
+    message: document.getElementById("publicMessage"),
+};
 
-  if (!response.ok) {
-    throw new Error(data.error || `Request failed (${response.status})`);
-  }
+let cachedPortfolio = null;
+let cachedWatchlist = null;
 
-  return data;
-}
 
-function renderPortfolio(data) {
-  const positions = data.positions || [];
-
-  $("#position-count").textContent = data.position_count ?? positions.length;
-
-  const largest = positions.reduce(
-    (best, item) =>
-      Number(item.allocation_pct) > Number(best?.allocation_pct ?? -1)
-        ? item
-        : best,
-    null
-  );
-
-  $("#largest-allocation").textContent =
-    largest ? `${fmt(largest.allocation_pct)}%` : "—";
-
-  $("#largest-ticker").textContent =
-    largest ? largest.ticker : "No positions";
-
-  $("#allocation-note").textContent =
-    `Allocation based on ${data.allocation_basis || "recorded cost basis"}. ` +
-    "It does not yet represent live market-value allocation.";
-
-  $("#portfolio-rows").innerHTML = positions.map(position => {
-    const weight = Math.max(
-      0,
-      Math.min(100, Number(position.allocation_pct) || 0)
-    );
-
-    return `
-      <tr>
-        <td><span class="ticker">${position.ticker}</span></td>
-        <td class="num">${fmt(weight)}%</td>
-        <td class="num">$${fmt(position.avg_price)}</td>
-        <td>
-          <div style="display:flex;align-items:center;gap:10px;min-width:110px">
-            <div style="height:7px;flex:1;background:#252a34;border-radius:5px;overflow:hidden">
-              <div style="height:100%;width:${weight}%;background:#818cf8;border-radius:5px"></div>
-            </div>
-            <small>${fmt(weight)}%</small>
-          </div>
-        </td>
-      </tr>`;
-  }).join("") || `
-    <tr><td colspan="4" class="muted">No holdings available.</td></tr>`;
-}
-
-function renderWatchlist(watchlist) {
-  const entries = Object.entries(watchlist || {}).sort(
-    ([a], [b]) => a.localeCompare(b)
-  );
-
-  $("#watchlist-count").textContent = entries.length;
-
-  $("#watchlist-rows").innerHTML = entries.map(([ticker, item]) => `
-    <tr>
-      <td><span class="ticker">${ticker}</span></td>
-      <td>${targetText(item.price_targets)}</td>
-      <td>${directionTargets(item, "FxPE", "trim")}</td>
-      <td>${directionTargets(item, "FxPE", "buy")}</td>
-      <td>${directionTargets(item, "PE", "trim")}</td>
-      <td>${directionTargets(item, "PE", "buy")}</td>
-      <td>${directionTargets(item, "P/S", "trim")}</td>
-      <td>${directionTargets(item, "P/S", "buy")}</td>
-    </tr>`
-  ).join("") || `
-    <tr><td colspan="8" class="muted">No watchlist tickers found.</td></tr>`;
-}
-
-function renderWorkflows(runs) {
-  $("#workflow-list").innerHTML = runs.map(run => {
-    const status = run.status === "completed"
-      ? (run.conclusion || "completed")
-      : (run.status || "unknown");
-
-    const safeUrl = (() => {
-      try {
-        const url = new URL(run.html_url);
-        return url.hostname === "github.com" ? url.href : "";
-      } catch {
-        return "";
-      }
-    })();
-
-    return `
-      <div class="workflow">
-        <div>
-          <b>${escapeHtml(run.name || "Workflow")}</b>
-          <small>
-            ${escapeHtml(run.created_at
-              ? new Date(run.created_at).toLocaleString()
-              : "Time unavailable")}
-            · ${safeUrl
-              ? `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#a5b4fc">View run ↗</a>`
-              : "Run details unavailable"}
-          </small>
-        </div>
-        <span class="pill">${escapeHtml(status)}</span>
-      </div>`;
-  }).join("") || '<p class="muted">No workflow runs found.</p>';
-}
+/* -------------------------
+   General helpers
+------------------------- */
 
 function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, char => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  })[char]);
+    return String(value ?? "").replace(/[&<>"']/g, (character) => {
+        const entities = {
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#039;",
+        };
+
+        return entities[character];
+    });
 }
 
-async function refreshPublicDashboard() {
-  $("#public-error").textContent = "";
+function asArray(payload, possibleKeys = []) {
+    if (Array.isArray(payload)) {
+        return payload;
+    }
 
-  try {
-    const [portfolio, watchlist, workflows] = await Promise.all([
-      getPublicData("/api/public/portfolio"),
-      getPublicData("/api/public/watchlist"),
-      getPublicData("/api/public/workflows")
+    if (!payload || typeof payload !== "object") {
+        return [];
+    }
+
+    for (const key of possibleKeys) {
+        if (Array.isArray(payload[key])) {
+            return payload[key];
+        }
+    }
+
+    return [];
+}
+
+function formatNumber(value, decimals = 2) {
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+        return "—";
+    }
+
+    return number.toLocaleString("en-US", {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+    });
+}
+
+function formatPrice(value) {
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+        return "—";
+    }
+
+    return "$" + formatNumber(number, 2);
+}
+
+function showMessage(message, isError = false) {
+    elements.message.textContent = message;
+    elements.message.hidden = !message;
+    elements.message.classList.toggle("error", isError);
+}
+
+function setLoading(isLoading) {
+    elements.refreshButton.disabled = isLoading;
+    elements.refreshButton.textContent = isLoading
+        ? "Refreshing…"
+        : "Refresh data";
+}
+
+async function fetchJson(url) {
+    const response = await fetch(url, {
+        method: "GET",
+        headers: {
+            Accept: "application/json",
+        },
+        cache: "no-store",
+    });
+
+    if (!response.ok) {
+        throw new Error(`Request failed (${response.status}): ${url}`);
+    }
+
+    return response.json();
+}
+
+
+/* -------------------------
+   Tab navigation
+------------------------- */
+
+function activateTab(tabName, moveFocus = false) {
+    const showHoldings = tabName === "holdings";
+
+    elements.holdingsTab.setAttribute(
+        "aria-selected",
+        String(showHoldings)
+    );
+    elements.watchlistTab.setAttribute(
+        "aria-selected",
+        String(!showHoldings)
+    );
+
+    elements.holdingsTab.tabIndex = showHoldings ? 0 : -1;
+    elements.watchlistTab.tabIndex = showHoldings ? -1 : 0;
+
+    elements.holdingsPanel.hidden = !showHoldings;
+    elements.watchlistPanel.hidden = showHoldings;
+
+    if (moveFocus) {
+        (showHoldings
+            ? elements.holdingsTab
+            : elements.watchlistTab
+        ).focus();
+    }
+}
+
+elements.holdingsTab.addEventListener("click", () => {
+    activateTab("holdings");
+});
+
+elements.watchlistTab.addEventListener("click", () => {
+    activateTab("watchlist");
+});
+
+for (const [tab, name] of [
+    [elements.holdingsTab, "holdings"],
+    [elements.watchlistTab, "watchlist"],
+]) {
+    tab.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+            event.preventDefault();
+
+            const nextTab = name === "holdings"
+                ? "watchlist"
+                : "holdings";
+
+            activateTab(nextTab, true);
+        }
+
+        if (event.key === "Home") {
+            event.preventDefault();
+            activateTab("holdings", true);
+        }
+
+        if (event.key === "End") {
+            event.preventDefault();
+            activateTab("watchlist", true);
+        }
+    });
+}
+
+
+/* -------------------------
+   Holdings tab
+------------------------- */
+
+function renderHoldings(payload) {
+    const holdings = asArray(payload, [
+        "holdings",
+        "portfolio",
+        "positions",
+        "data",
     ]);
 
-    renderPortfolio(portfolio);
-    renderWatchlist(watchlist);
-    renderWorkflows(workflows);
+    // Some API responses may wrap the holdings in an object.
+    const metadata = payload && !Array.isArray(payload)
+        ? payload
+        : {};
 
-    $("#last-updated").textContent =
-      `Last refreshed: ${new Date().toLocaleString()}`;
-  } catch (error) {
-    $("#public-error").textContent =
-      `Could not load public data: ${error.message}`;
-  }
+    elements.holdingCount.textContent = String(
+        metadata.position_count ?? holdings.length
+    );
+
+    elements.allocationBasis.textContent =
+        metadata.allocation_basis || "Cost basis";
+
+    if (!holdings.length) {
+        elements.holdingsBody.innerHTML = `
+            <tr>
+                <td colspan="3" class="public-empty">
+                    No holdings available.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    const sortedHoldings = [...holdings].sort((a, b) =>
+        String(a.ticker || "").localeCompare(String(b.ticker || ""))
+    );
+
+    elements.holdingsBody.innerHTML = sortedHoldings.map((holding) => {
+        const ticker = escapeHtml(holding.ticker || "—");
+
+        const avgPrice = Number(
+            holding.avg_price ?? holding.average_price
+        );
+
+        const allocation = Number(
+            holding.allocation_pct ?? holding.allocation
+        );
+
+        const safeAllocation = Number.isFinite(allocation)
+            ? Math.max(0, Math.min(100, allocation))
+            : 0;
+
+        const allocationText = Number.isFinite(allocation)
+            ? `${formatNumber(allocation, 2)}%`
+            : "—";
+
+        return `
+            <tr>
+                <td>
+                    <span class="public-ticker">${ticker}</span>
+                </td>
+
+                <td class="public-number">
+                    ${formatPrice(avgPrice)}
+                </td>
+
+                <td>
+                    <div class="public-allocation">
+                        <span class="public-number">
+                            ${allocationText}
+                        </span>
+
+                        <div class="public-allocation-track"
+                             aria-hidden="true">
+                            <div
+                                class="public-allocation-fill"
+                                style="width: ${safeAllocation}%;">
+                            </div>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join("");
 }
 
-$("#refresh").addEventListener("click", refreshPublicDashboard);
 
-refreshPublicDashboard();
+/* -------------------------
+   Watchlist target helpers
+------------------------- */
+
+function formatTargetValue(value) {
+    if (value === null || value === undefined || value === "") {
+        return "—";
+    }
+
+    if (typeof value === "number" || (
+        typeof value === "string" && value.trim() !== ""
+        && Number.isFinite(Number(value))
+    )) {
+        return formatNumber(Number(value), 2);
+    }
+
+    if (typeof value === "object") {
+        const parts = [];
+
+        if (value.direction) {
+            parts.push(String(value.direction));
+        }
+
+        if (value.type) {
+            parts.push(String(value.type));
+        }
+
+        if (value.multiple !== undefined) {
+            parts.push(`${value.multiple}x`);
+        } else if (value.value !== undefined) {
+            parts.push(String(value.value));
+        }
+
+        if (value.metric) {
+            parts.push(String(value.metric));
+        }
+
+        return parts.join(" ") || "Target";
+    }
+
+    return String(value);
+}
+
+function renderPriceTargets(targets) {
+    if (!Array.isArray(targets)) {
+        if (targets && typeof targets === "object") {
+            targets = Object.entries(targets).map(([key, value]) => ({
+                label: key,
+                value,
+            }));
+        } else if (targets !== null && targets !== undefined) {
+            targets = [targets];
+        } else {
+            targets = [];
+        }
+    }
+
+    const formatted = targets.map((target) => {
+        if (typeof target === "number" || typeof target === "string") {
+            return {
+                label: "",
+                value: formatTargetValue(target),
+            };
+        }
+
+        return {
+            label: target.label || target.type || target.direction || "",
+            value: formatTargetValue(target),
+        };
+    });
+
+    return renderTargetChips(formatted);
+}
+
+function renderValuationTargets(targets) {
+    if (!targets) {
+        return renderTargetChips([]);
+    }
+
+    const entries = Array.isArray(targets)
+        ? targets.map((target) => [
+            target.metric || target.type || "Valuation",
+            target,
+        ])
+        : Object.entries(targets);
+
+    const chips = [];
+
+    for (const [metric, target] of entries) {
+        if (target === null || target === undefined || target === "") {
+            continue;
+        }
+
+        let label = String(metric);
+        let value = target;
+
+        if (target && typeof target === "object") {
+            label = target.metric || target.type || label;
+            value = target.multiple ?? target.value ?? target.target ?? target;
+
+            const direction = target.direction || target.action || "";
+            const formattedValue = formatTargetValue(value);
+
+            chips.push({
+                label,
+                value: direction
+                    ? `${direction} ${formattedValue}`
+                    : formattedValue,
+            });
+        } else {
+            chips.push({
+                label,
+                value: formatTargetValue(value),
+            });
+        }
+    }
+
+    return renderTargetChips(chips);
+}
+
+function renderTargetChips(targets) {
+    if (!targets.length) {
+        return '<span class="public-muted">—</span>';
+    }
+
+    return `
+        <div class="public-target-list">
+            ${targets.map((target) => {
+                const label = target.label
+                    ? `<strong>${escapeHtml(target.label)}:</strong> `
+                    : "";
+
+                return `
+                    <span class="public-target">
+                        ${label}${escapeHtml(target.value)}
+                    </span>
+                `;
+            }).join("")}
+        </div>
+    `;
+}
+
+
+/* -------------------------
+   Watchlist tab
+------------------------- */
+
+function renderWatchlist(payload) {
+    const watchlist = asArray(payload, [
+        "watchlist",
+        "items",
+        "data",
+    ]);
+
+    elements.watchlistCount.textContent =
+        `${watchlist.length} ${watchlist.length === 1 ? "ticker" : "tickers"}`;
+
+    if (!watchlist.length) {
+        elements.watchlistBody.innerHTML = `
+            <tr>
+                <td colspan="3" class="public-empty">
+                    No watchlist entries available.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    const sortedWatchlist = [...watchlist].sort((a, b) =>
+        String(a.ticker || "").localeCompare(String(b.ticker || ""))
+    );
+
+    elements.watchlistBody.innerHTML = sortedWatchlist.map((item) => {
+        const ticker = escapeHtml(item.ticker || "—");
+
+        const priceTargets = renderPriceTargets(
+            item.price_targets ?? item.targets
+        );
+
+        const valuationTargets = renderValuationTargets(
+            item.valuation_targets
+        );
+
+        return `
+            <tr>
+                <td>
+                    <span class="public-ticker">${ticker}</span>
+                </td>
+
+                <td>${priceTargets}</td>
+
+                <td>${valuationTargets}</td>
+            </tr>
+        `;
+    }).join("");
+}
+
+
+/* -------------------------
+   Data loading
+------------------------- */
+
+async function loadDashboard() {
+    setLoading(true);
+    showMessage("");
+
+    const results = await Promise.allSettled([
+        fetchJson(API.portfolio),
+        fetchJson(API.watchlist),
+    ]);
+
+    const errors = [];
+
+    if (results[0].status === "fulfilled") {
+        cachedPortfolio = results[0].value;
+        renderHoldings(cachedPortfolio);
+    } else {
+        console.error("Could not load public holdings:", results[0].reason);
+
+        elements.holdingsBody.innerHTML = `
+            <tr>
+                <td colspan="3" class="public-empty">
+                    Could not load holdings. Please try refreshing.
+                </td>
+            </tr>
+        `;
+
+        elements.holdingCount.textContent = "—";
+        elements.allocationBasis.textContent = "—";
+        errors.push("holdings");
+    }
+
+    if (results[1].status === "fulfilled") {
+        cachedWatchlist = results[1].value;
+        renderWatchlist(cachedWatchlist);
+    } else {
+        console.error("Could not load public watchlist:", results[1].reason);
+
+        elements.watchlistBody.innerHTML = `
+            <tr>
+                <td colspan="3" class="public-empty">
+                    Could not load watchlist. Please try refreshing.
+                </td>
+            </tr>
+        `;
+
+        elements.watchlistCount.textContent = "Unavailable";
+        errors.push("watchlist");
+    }
+
+    if (errors.length) {
+        showMessage(
+            `Some data could not be loaded: ${errors.join(" and ")}. Please refresh to try again.`,
+            true
+        );
+    } else {
+        showMessage("");
+    }
+
+    setLoading(false);
+}
+
+elements.refreshButton.addEventListener("click", loadDashboard);
+
+
+/* -------------------------
+   Start dashboard
+------------------------- */
+
+activateTab("holdings");
+loadDashboard();

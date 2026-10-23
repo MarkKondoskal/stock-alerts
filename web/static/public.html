@@ -1,126 +1,439 @@
 
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b0d10">
-  <title>StockAlerts — Public Portfolio</title>
-  <link rel="stylesheet" href="/static/styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0b0b0b">
+    <title>Public Portfolio Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css">
+
+    <style>
+        .public-dashboard {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .public-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-bottom: 28px;
+        }
+
+        .public-header h1 {
+            margin: 0 0 6px;
+        }
+
+        .public-subtitle,
+        .public-muted {
+            color: #999;
+            font-size: 0.9rem;
+        }
+
+        .public-tabs {
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid #303030;
+            margin-bottom: 24px;
+        }
+
+        .public-tab {
+            appearance: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            background: transparent;
+            color: #999;
+            padding: 13px 20px;
+            cursor: pointer;
+            font: inherit;
+            font-weight: 600;
+            transition: color 0.15s ease, border-color 0.15s ease;
+        }
+
+        .public-tab:hover {
+            color: #fff;
+        }
+
+        .public-tab[aria-selected="true"] {
+            color: #fff;
+            border-bottom-color: #fff;
+        }
+
+        .public-tab:focus-visible,
+        .public-button:focus-visible {
+            outline: 2px solid #fff;
+            outline-offset: 3px;
+        }
+
+        .public-panel[hidden] {
+            display: none !important;
+        }
+
+        .public-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .public-metric {
+            background: #141414;
+            border: 1px solid #292929;
+            border-radius: 12px;
+            padding: 18px;
+        }
+
+        .public-metric-label {
+            color: #999;
+            font-size: 0.85rem;
+            margin-bottom: 10px;
+        }
+
+        .public-metric-value {
+            color: #fff;
+            font-size: 1.6rem;
+            font-weight: 700;
+        }
+
+        .public-card {
+            background: #111;
+            border: 1px solid #292929;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+
+        .public-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            padding: 18px 20px;
+            border-bottom: 1px solid #292929;
+        }
+
+        .public-card-header h2 {
+            margin: 0;
+            font-size: 1.1rem;
+        }
+
+        .public-table-wrap {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        .public-table {
+            width: 100%;
+            border-collapse: collapse;
+            white-space: nowrap;
+        }
+
+        .public-table th,
+        .public-table td {
+            padding: 15px 20px;
+            text-align: left;
+            border-bottom: 1px solid #252525;
+        }
+
+        .public-table th {
+            color: #999;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .public-table td {
+            font-size: 0.92rem;
+        }
+
+        .public-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .public-table tbody tr:hover {
+            background: #171717;
+        }
+
+        .public-ticker {
+            color: #fff;
+            font-weight: 700;
+        }
+
+        .public-number {
+            font-variant-numeric: tabular-nums;
+        }
+
+        .public-allocation {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 180px;
+        }
+
+        .public-allocation-track {
+            width: 100px;
+            height: 6px;
+            background: #303030;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .public-allocation-fill {
+            height: 100%;
+            background: #e5e5e5;
+            border-radius: 10px;
+        }
+
+        .public-target-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 7px;
+            max-width: 480px;
+            white-space: normal;
+        }
+
+        .public-target {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: #202020;
+            border: 1px solid #353535;
+            border-radius: 6px;
+            padding: 5px 8px;
+            font-size: 0.82rem;
+        }
+
+        .public-empty {
+            padding: 28px 20px;
+            color: #999;
+            text-align: center;
+        }
+
+        .public-button {
+            appearance: none;
+            border: 1px solid #383838;
+            border-radius: 8px;
+            background: #202020;
+            color: #fff;
+            padding: 9px 13px;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        .public-button:hover {
+            background: #303030;
+        }
+
+        .public-button:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+
+        .public-message {
+            padding: 12px 15px;
+            border: 1px solid #353535;
+            border-radius: 8px;
+            margin-bottom: 18px;
+            color: #ccc;
+        }
+
+        .public-message[hidden] {
+            display: none;
+        }
+
+        .public-message.error {
+            border-color: #743838;
+            color: #ffb4b4;
+        }
+
+        .public-footer {
+            color: #777;
+            font-size: 0.8rem;
+            text-align: center;
+            padding: 12px 0 24px;
+        }
+
+        @media (max-width: 600px) {
+            .public-dashboard {
+                padding: 16px;
+            }
+
+            .public-tab {
+                flex: 1;
+                padding: 12px 10px;
+            }
+
+            .public-table th,
+            .public-table td {
+                padding: 12px 14px;
+            }
+
+            .public-metric-value {
+                font-size: 1.35rem;
+            }
+        }
+    </style>
 </head>
+
 <body>
-  <header class="top">
-    <div class="brand">
-      <div class="logo">↗</div>
-      <div>
-        <b>StockAlerts</b>
-        <small>Public portfolio · Read-only</small>
-      </div>
-    </div>
-    <div class="topright">
-      <span class="pill good">Public view</span>
-      <button id="refresh" type="button">↻ Refresh</button>
-    </div>
-  </header>
+    <main class="public-dashboard">
+        <header class="public-header">
+            <div>
+                <h1>Portfolio Dashboard</h1>
+                <div class="public-subtitle">
+                    Public view · Read-only
+                </div>
+            </div>
 
-  <main>
-    <section class="view">
-      <div class="heading">
-        <div>
-          <h1>Portfolio Overview</h1>
-          <p>Holdings, allocation percentages and watchlist targets.</p>
+            <button id="refreshPublic" class="public-button" type="button">
+                Refresh data
+            </button>
+        </header>
+
+        <div id="publicMessage"
+             class="public-message"
+             role="status"
+             aria-live="polite"
+             hidden></div>
+
+        <div class="public-tabs"
+             role="tablist"
+             aria-label="Portfolio sections">
+
+            <button
+                id="holdingsTab"
+                class="public-tab"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                aria-controls="holdingsPanel"
+                tabindex="0">
+                Holdings
+            </button>
+
+            <button
+                id="watchlistTab"
+                class="public-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="watchlistPanel"
+                tabindex="-1">
+                Watchlist
+            </button>
         </div>
-      </div>
 
-      <div class="metrics">
-        <article class="metric">
-          <label>Positions</label>
-          <strong id="position-count">—</strong>
-          <small>Open holdings</small>
-        </article>
-        <article class="metric">
-          <label>Largest allocation</label>
-          <strong id="largest-allocation">—</strong>
-          <small id="largest-ticker">Waiting for data</small>
-        </article>
-        <article class="metric">
-          <label>Watchlist</label>
-          <strong id="watchlist-count">—</strong>
-          <small>Tracked tickers</small>
-        </article>
-      </div>
+        <!-- TAB 1: HOLDINGS -->
+        <section
+            id="holdingsPanel"
+            class="public-panel"
+            role="tabpanel"
+            aria-labelledby="holdingsTab">
 
-      <div class="panel">
-        <div class="panel-title">
-          <div>
-            <h2>Portfolio allocation</h2>
-            <p id="allocation-note">
-              Allocation percentages are calculated from recorded cost basis.
+            <div class="public-metrics">
+                <div class="public-metric">
+                    <div class="public-metric-label">Holdings</div>
+                    <div id="holdingCount" class="public-metric-value">—</div>
+                </div>
+
+                <div class="public-metric">
+                    <div class="public-metric-label">Allocation basis</div>
+                    <div id="allocationBasis"
+                         class="public-metric-value"
+                         style="font-size: 1.1rem;">
+                        —
+                    </div>
+                </div>
+            </div>
+
+            <div class="public-card">
+                <div class="public-card-header">
+                    <h2>Portfolio Holdings</h2>
+                    <span class="public-muted">
+                        Cost per share and portfolio allocation
+                    </span>
+                </div>
+
+                <div class="public-table-wrap">
+                    <table class="public-table">
+                        <thead>
+                            <tr>
+                                <th>Ticker</th>
+                                <th>Cost per Share</th>
+                                <th>Allocation</th>
+                            </tr>
+                        </thead>
+                        <tbody id="holdingsBody">
+                            <tr>
+                                <td colspan="3" class="public-empty">
+                                    Loading holdings…
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <p class="public-muted">
+                Allocation is calculated using recorded cost basis, not
+                live market value. Individual share counts and dollar
+                position values are not displayed.
             </p>
-          </div>
-        </div>
-        <div class="tablewrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Ticker</th>
-                <th>Allocation</th>
-                <th>Cost per share</th>
-                <th>Weight</th>
-              </tr>
-            </thead>
-            <tbody id="portfolio-rows">
-              <tr><td colspan="4">Loading portfolio…</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+        </section>
 
-      <div class="panel">
-        <div class="panel-title">
-          <div>
-            <h2>Watchlist & targets</h2>
-            <p>Public view of configured price and valuation targets.</p>
-          </div>
-        </div>
-        <div class="tablewrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Ticker</th>
-                <th>Price targets</th>
-                <th>Forward P/E trim</th>
-                <th>Forward P/E buy</th>
-                <th>P/E trim</th>
-                <th>P/E buy</th>
-                <th>P/S trim</th>
-                <th>P/S buy</th>
-              </tr>
-            </thead>
-            <tbody id="watchlist-rows">
-              <tr><td colspan="8">Loading watchlist…</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+        <!-- TAB 2: WATCHLIST -->
+        <section
+            id="watchlistPanel"
+            class="public-panel"
+            role="tabpanel"
+            aria-labelledby="watchlistTab"
+            hidden>
 
-      <div class="panel">
-        <div class="panel-title">
-          <div>
-            <h2>GitHub workflow status</h2>
-            <p>Recent automation runs.</p>
-          </div>
-        </div>
-        <div id="workflow-list" class="workflow-list">
-          <p class="muted">Loading workflow history…</p>
-        </div>
-      </div>
+            <div class="public-card">
+                <div class="public-card-header">
+                    <h2>Watchlist</h2>
+                    <span id="watchlistCount" class="public-muted">
+                        Loading…
+                    </span>
+                </div>
 
-      <p id="last-updated" class="muted"></p>
-      <p id="public-error" class="error"></p>
-    </section>
-  </main>
+                <div class="public-table-wrap">
+                    <table class="public-table">
+                        <thead>
+                            <tr>
+                                <th>Ticker</th>
+                                <th>Price Targets</th>
+                                <th>Valuation Targets</th>
+                            </tr>
+                        </thead>
+                        <tbody id="watchlistBody">
+                            <tr>
+                                <td colspan="3" class="public-empty">
+                                    Loading watchlist…
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
-  <script src="/static/public.js"></script>
+            <p class="public-muted">
+                Targets are shown for reference only. This page does not
+                support editing targets or triggering actions.
+            </p>
+        </section>
+
+        <footer class="public-footer">
+            Public, read-only dashboard
+        </footer>
+    </main>
+
+    <script src="/static/public.js" defer></script>
 </body>
 </html>
