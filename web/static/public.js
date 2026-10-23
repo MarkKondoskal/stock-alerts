@@ -472,7 +472,6 @@ activateTab("holdings");
 loadDashboard();
 
 
-
 /* -------------------------
    Analytics, read-only endpoints
 ------------------------- */
