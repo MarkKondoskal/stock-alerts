@@ -702,6 +702,26 @@ def public_watchlist_get():
         }), 502
 
 
+@app.get("/api/public/analytics")
+def public_analytics_get():
+    """Read-only public analytics. Response is an explicit safe-field allowlist."""
+    period = request.args.get("period", "1M").upper()
+    if period not in ("1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "3Y", "ALL"):
+        return jsonify({"error": "Unsupported period."}), 400
+    try:
+        from public_analytics import get_public_analytics
+        portfolio, _ = get_file("portfolio/marks_portfolio.json", data=True)
+        if not isinstance(portfolio, dict):
+            return jsonify({"error": "Invalid portfolio data."}), 502
+        result = get_public_analytics(portfolio, period)
+        response = jsonify(result)
+        response.headers["Cache-Control"] = "public, max-age=60"
+        return response
+    except (requests.RequestException, RuntimeError, ValueError, TypeError, KeyError, ImportError):
+        app.logger.exception("Could not calculate public analytics")
+        return jsonify({"error": "Could not load market analytics."}), 502
+
+
 @app.get("/api/public/workflows")
 def public_workflows_get():
     """Publish workflow status and run timestamps only."""

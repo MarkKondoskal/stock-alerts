@@ -7,6 +7,7 @@
     <meta name="theme-color" content="#0b0b0b">
     <title>Public Portfolio Dashboard</title>
     <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js" defer></script>
 
     <style>
         .public-dashboard {
@@ -259,6 +260,19 @@
             padding: 12px 0 24px;
         }
 
+        .analytics-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 22px; }
+        .analytics-card { padding: 19px; background: #111; border: 1px solid #292929; border-radius: 12px; min-width: 0; }
+        .analytics-card.full { grid-column: 1 / -1; }
+        .analytics-title { margin: 0; font-size: 1.05rem; }
+        .analytics-head { display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+        .analytics-chart { height: 310px; position:relative; }
+        .analytics-chart.short { height: 290px; }
+        .analytics-periods { display:flex; flex-wrap:wrap; gap:5px; }
+        .analytics-period { cursor:pointer; border: 1px solid #333; background: #191919; color:#aaa; padding:7px 9px; border-radius:7px; font:inherit; font-size:.78rem; }
+        .analytics-period.active { color:white; background:#353535; border-color:#777; }
+        .analytics-note { margin:10px 0 0; font-size:.8rem; color:#999; line-height:1.45; }
+        .return-positive { color:#4ade80; } .return-negative { color:#fb7185; }
+        @media (max-width: 800px) { .analytics-grid { grid-template-columns: 1fr; } }
         @media (max-width: 600px) {
             .public-dashboard {
                 padding: 16px;
@@ -352,11 +366,36 @@
                 </div>
             </div>
 
+            <div class="analytics-grid">
+                <div class="analytics-card full">
+                    <div class="analytics-head"><h2 class="analytics-title">Portfolio vs. S&amp;P 500 (SPY)</h2>
+                        <div class="analytics-periods" id="performancePeriods" aria-label="Performance time period"></div>
+                    </div>
+                    <div class="analytics-chart"><canvas id="performanceChart" role="img" aria-label="Portfolio and SPY performance line chart"></canvas></div>
+                    <p id="performanceNote" class="analytics-note">Loading historical prices…</p>
+                </div>
+                <div class="analytics-card">
+                    <div class="analytics-head"><h2 class="analytics-title">Holdings allocation</h2></div>
+                    <div class="analytics-chart short"><canvas id="holdingsChart" role="img" aria-label="Holdings allocation doughnut chart"></canvas></div>
+                </div>
+                <div class="analytics-card">
+                    <div class="analytics-head"><h2 class="analytics-title">Sector allocation</h2></div>
+                    <div class="analytics-chart short"><canvas id="sectorChart" role="img" aria-label="Sector allocation doughnut chart"></canvas></div>
+                    <p class="analytics-note">Sector categories are assigned in the backend; unknown tickers appear as unclassified.</p>
+                </div>
+                <div class="analytics-card full">
+                    <div class="analytics-head"><h2 class="analytics-title">Biggest gainers &amp; losers</h2>
+                        <div class="analytics-periods" id="gainerPeriods" aria-label="Gainers and losers period"></div>
+                    </div>
+                    <div class="analytics-chart"><canvas id="gainersChart" role="img" aria-label="Holdings return horizontal bar chart"></canvas></div>
+                    <p id="gainerNote" class="analytics-note">Percentage stock-price change for selected period, not dollar P/L.</p>
+                </div>
+            </div>
             <div class="public-card">
                 <div class="public-card-header">
                     <h2>Portfolio Holdings</h2>
                     <span class="public-muted">
-                        Cost per share and portfolio allocation
+                        All holdings, largest allocation first
                     </span>
                 </div>
 
@@ -365,13 +404,16 @@
                         <thead>
                             <tr>
                                 <th>Ticker</th>
-                                <th>Cost per Share</th>
+                                <th>Sector</th>
+                                <th>Cost / Share</th>
+                                <th>Latest Price</th>
                                 <th>Allocation</th>
+                                <th id="holdingReturnHeader">1M Return</th>
                             </tr>
                         </thead>
                         <tbody id="holdingsBody">
                             <tr>
-                                <td colspan="3" class="public-empty">
+                                <td colspan="6" class="public-empty">
                                     Loading holdings…
                                 </td>
                             </tr>
@@ -381,9 +423,9 @@
             </div>
 
             <p class="public-muted">
-                Allocation is calculated using recorded cost basis, not
-                live market value. Individual share counts and dollar
-                position values are not displayed.
+                Allocation is based on available latest market prices. Returns are
+                price-only, and do not include dividends. No share counts, position
+                dollar values, or total invested amounts are published.
             </p>
         </section>
 

@@ -187,89 +187,32 @@ for (const [tab, name] of [
 ------------------------- */
 
 function renderHoldings(payload) {
-    const holdings = asArray(payload, [
-        "holdings",
-        "portfolio",
-        "positions",
-        "data",
-    ]);
-
-    // Some API responses may wrap the holdings in an object.
-    const metadata = payload && !Array.isArray(payload)
-        ? payload
-        : {};
-
-    elements.holdingCount.textContent = String(
-        metadata.position_count ?? holdings.length
-    );
-
-    elements.allocationBasis.textContent =
-        metadata.allocation_basis || "Cost basis";
-
-    if (!holdings.length) {
-        elements.holdingsBody.innerHTML = `
-            <tr>
-                <td colspan="3" class="public-empty">
-                    No holdings available.
-                </td>
-            </tr>
-        `;
-        return;
-    }
-
-    const sortedHoldings = [...holdings].sort((a, b) =>
-        String(a.ticker || "").localeCompare(String(b.ticker || ""))
-    );
-
-    elements.holdingsBody.innerHTML = sortedHoldings.map((holding) => {
-        const ticker = escapeHtml(holding.ticker || "—");
-
-        const avgPrice = Number(
-            holding.avg_price ?? holding.average_price
-        );
-
-        const allocation = Number(
-            holding.allocation_pct ?? holding.allocation
-        );
-
-        const safeAllocation = Number.isFinite(allocation)
-            ? Math.max(0, Math.min(100, allocation))
-            : 0;
-
-        const allocationText = Number.isFinite(allocation)
-            ? `${formatNumber(allocation, 2)}%`
-            : "—";
-
-        return `
-            <tr>
-                <td>
-                    <span class="public-ticker">${ticker}</span>
-                </td>
-
-                <td class="public-number">
-                    ${formatPrice(avgPrice)}
-                </td>
-
-                <td>
-                    <div class="public-allocation">
-                        <span class="public-number">
-                            ${allocationText}
-                        </span>
-
-                        <div class="public-allocation-track"
-                             aria-hidden="true">
-                            <div
-                                class="public-allocation-fill"
-                                style="width: ${safeAllocation}%;">
-                            </div>
-                        </div>
-                    </div>
-                </td>
-            </tr>
-        `;
-    }).join("");
+    const holdings = asArray(payload, ["holdings", "portfolio", "positions", "data"]);
+    const meta = payload && !Array.isArray(payload) ? payload : {};
+    elements.holdingCount.textContent = String(meta.position_count ?? holdings.length);
+    elements.allocationBasis.textContent = meta.allocation_basis || "Cost basis";
+    elements.holdingsBody.innerHTML = holdings.length ? [...holdings]
+        .sort((a,b) => (b.allocation_pct || 0) - (a.allocation_pct || 0))
+        .map(h => holdingRow(h)).join("")
+        : `<tr><td colspan="6" class="public-empty">No holdings available.</td></tr>`;
 }
 
+function holdingRow(h) {
+    const allocation = Number(h.allocation_pct) || 0;
+    const price = h.current_price === null || h.current_price === undefined ? "—" : formatPrice(h.current_price);
+    const gain = h.period_return_pct;
+    const gainText = gain === null || gain === undefined ? "—" : `${gain > 0 ? "+" : ""}${formatNumber(gain)}%`;
+    const gainClass = gain > 0 ? "return-positive" : gain < 0 ? "return-negative" : "";
+    return `<tr>
+        <td class="public-ticker">${escapeHtml(h.ticker || "—")}</td>
+        <td>${escapeHtml(h.sector || "—")}</td>
+        <td class="public-number">${formatPrice(h.cost_per_share ?? h.avg_price)}</td>
+        <td class="public-number">${price}</td>
+        <td><div class="public-allocation"><span class="public-number">${formatNumber(allocation)}%</span>
+            <div class="public-allocation-track"><div class="public-allocation-fill" style="width:${Math.max(0, Math.min(100,allocation))}%"></div></div></div></td>
+        <td class="public-number ${gainClass}">${gainText}</td>
+    </tr>`;
+}
 
 /* -------------------------
    Watchlist target helpers
@@ -346,48 +289,21 @@ function renderPriceTargets(targets) {
 }
 
 function renderValuationTargets(targets) {
-    if (!targets) {
-        return renderTargetChips([]);
-    }
-
-    const entries = Array.isArray(targets)
-        ? targets.map((target) => [
-            target.metric || target.type || "Valuation",
-            target,
-        ])
-        : Object.entries(targets);
-
+    if (!targets || typeof targets !== "object") return renderTargetChips([]);
     const chips = [];
-
-    for (const [metric, target] of entries) {
-        if (target === null || target === undefined || target === "") {
-            continue;
-        }
-
-        let label = String(metric);
-        let value = target;
-
-        if (target && typeof target === "object") {
-            label = target.metric || target.type || label;
-            value = target.multiple ?? target.value ?? target.target ?? target;
-
-            const direction = target.direction || target.action || "";
-            const formattedValue = formatTargetValue(value);
-
-            chips.push({
-                label,
-                value: direction
-                    ? `${direction} ${formattedValue}`
-                    : formattedValue,
-            });
+    for (const [metric, targetsByDirection] of Object.entries(targets)) {
+        if (targetsByDirection && typeof targetsByDirection === "object" && !Array.isArray(targetsByDirection)) {
+            for (const direction of ["buy", "trim"]) {
+                for (const value of (Array.isArray(targetsByDirection[direction]) ? targetsByDirection[direction] : [])) {
+                    chips.push({ label: `${metric} ${direction}`, value: `${formatTargetValue(value)}x` });
+                }
+            }
         } else {
-            chips.push({
-                label,
-                value: formatTargetValue(value),
-            });
+            for (const value of (Array.isArray(targetsByDirection) ? targetsByDirection : [])) {
+                chips.push({ label: metric, value: `${formatTargetValue(value)}x` });
+            }
         }
     }
-
     return renderTargetChips(chips);
 }
 
@@ -420,10 +336,16 @@ function renderTargetChips(targets) {
 
 function renderWatchlist(payload) {
     const watchlist = asArray(payload, [
-        "watchlist",
-        "items",
-        "data",
+        "watchlist", "items", "data",
     ]);
+    // Public endpoint returns an object keyed by ticker, not an array.
+    if (!watchlist.length && payload && typeof payload === "object" && !Array.isArray(payload)) {
+        for (const [ticker, entry] of Object.entries(payload)) {
+            if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+                watchlist.push({ticker, ...entry});
+            }
+        }
+    }
 
     elements.watchlistCount.textContent =
         `${watchlist.length} ${watchlist.length === 1 ? "ticker" : "tickers"}`;
@@ -492,7 +414,7 @@ async function loadDashboard() {
 
         elements.holdingsBody.innerHTML = `
             <tr>
-                <td colspan="3" class="public-empty">
+                <td colspan="6" class="public-empty">
                     Could not load holdings. Please try refreshing.
                 </td>
             </tr>
@@ -542,3 +464,170 @@ elements.refreshButton.addEventListener("click", loadDashboard);
 
 activateTab("holdings");
 loadDashboard();
+initializeAnalytics();
+
+
+/* -------------------------
+   Analytics, read-only endpoints
+------------------------- */
+const PERFORMANCE_PERIODS = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "3Y", "ALL"];
+const GAINER_PERIODS = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y"];
+const analyticsCharts = {};
+const analyticsRequests = new Map();
+let performancePeriod = "1M";
+let gainerPeriod = "1M";
+let lastAllocation = null;
+let lastGainers = null;
+
+const colors = ["#60a5fa", "#34d399", "#fbbf24", "#f472b6", "#a78bfa", "#fb923c",
+    "#2dd4bf", "#818cf8", "#f87171", "#bef264", "#38bdf8", "#e879f9"];
+
+function selector(id, periods, selected, callback) {
+    const container = document.getElementById(id);
+    container.replaceChildren();
+    periods.forEach(period => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `analytics-period ${period === selected ? "active" : ""}`;
+        button.textContent = period === "ALL" ? "All" : period;
+        button.setAttribute("aria-pressed", String(period === selected));
+        button.addEventListener("click", () => callback(period));
+        container.appendChild(button);
+    });
+}
+
+async function analyticsFor(period) {
+    if (!analyticsRequests.has(period)) {
+        const promise = fetchJson(`/api/public/analytics?period=${encodeURIComponent(period)}`)
+            .catch(error => { analyticsRequests.delete(period); throw error; });
+        analyticsRequests.set(period, promise);
+    }
+    return analyticsRequests.get(period);
+}
+
+function createChart(id, type, data, options = {}) {
+    if (!window.Chart) {
+        throw new Error("Chart.js could not be loaded. Check your connection to the chart library.");
+    }
+    if (analyticsCharts[id]) analyticsCharts[id].destroy();
+    const element = document.getElementById(id);
+    analyticsCharts[id] = new Chart(element, {
+        type, data,
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            color: "#aaa",
+            animation: { duration: 200 },
+            plugins: { legend: { labels: { color: "#bbb", boxWidth: 12 } } },
+            ...options,
+        },
+    });
+}
+
+async function updatePerformance() {
+    const period = performancePeriod;
+    const note = document.getElementById("performanceNote");
+    note.textContent = "Loading market history…";
+    try {
+        const info = await analyticsFor(period);
+        if (period !== performancePeriod) return;
+        const spy = new Map(info.spy.map(p => [p.date, p.value]));
+        const aligned = info.performance.filter(p => spy.has(p.date));
+        if (aligned.length < 2) {
+            if (analyticsCharts.performanceChart) analyticsCharts.performanceChart.destroy();
+            delete analyticsCharts.performanceChart;
+            note.textContent = "Not enough verified portfolio history for this period. " + info.performance_note;
+            return;
+        }
+        createChart("performanceChart", "line", {
+            labels: aligned.map(p => p.date),
+            datasets: [
+                { label: "Portfolio (proxy)", data: aligned.map(p => p.value), borderColor: "#60a5fa",
+                  backgroundColor: "#60a5fa", borderWidth: 2.3, pointRadius: 0, tension: .15 },
+                { label: "SPY", data: aligned.map(p => spy.get(p.date)), borderColor: "#bbb",
+                  backgroundColor: "#bbb", borderWidth: 2, pointRadius: 0, tension: .15 },
+            ],
+        }, { interaction: { intersect: false, mode: "index" },
+             scales: { x: { ticks: { maxTicksLimit: 7, color: "#888" }, grid: { display: false } },
+                       y: { ticks: { color: "#888", callback: v => `${v}%` }, grid: { color: "#282828" } } },
+             plugins: { legend: { labels: { color: "#bbb" } },
+                        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y.toFixed(2)}%` } } } });
+        note.textContent = `${info.performance_note} Available from: ${String(info.available_from || "—").slice(0, 10)}.`;
+    } catch (error) {
+        note.textContent = `Performance unavailable: ${error.message}`;
+    }
+}
+
+function doughnut(id, names, values) {
+    if (!names.length) return;
+    createChart(id, "doughnut", {
+        labels: names,
+        datasets: [{ data: values, backgroundColor: names.map((_, i) => colors[i % colors.length]),
+                     borderColor: "#111", borderWidth: 2 }],
+    }, { cutout: "65%", plugins: { legend: { position: "right", labels: { color: "#bbb", boxWidth: 10,
+                   font: { size: 11 } } }, tooltip: { callbacks: { label: c => `${c.label}: ${c.parsed.toFixed(2)}%` } } } });
+}
+
+function updateAllocation(info) {
+    if (info.holdings?.length) {
+        elements.holdingCount.textContent = String(info.holdings.length);
+        elements.allocationBasis.textContent = "Market value";
+        document.getElementById("holdingReturnHeader").textContent = `${gainerPeriod} Return`;
+        renderHoldings({ positions: info.holdings, position_count: info.holdings.length,
+                         allocation_basis: "Market value" });
+        if (window.Chart) {
+            doughnut("holdingsChart", info.holdings.map(h => h.ticker), info.holdings.map(h => h.allocation_pct));
+            doughnut("sectorChart", info.sectors.map(h => h.sector), info.sectors.map(h => h.allocation_pct));
+        }
+    }
+}
+
+async function updateGainers() {
+    const period = gainerPeriod;
+    const note = document.getElementById("gainerNote");
+    note.textContent = "Loading stock returns…";
+    try {
+        const info = await analyticsFor(period);
+        if (period !== gainerPeriod) return;
+        lastGainers = info;
+        const sorted = [...info.gainers].sort((a, b) => b.return_pct - a.return_pct);
+        if (!sorted.length) { note.textContent = "No price history available for the selected period."; return; }
+        const shown = [...sorted.slice(0, 5), ...sorted.slice(-5).filter(x => !sorted.slice(0, 5).some(y => y.ticker === x.ticker))];
+        createChart("gainersChart", "bar", {
+            labels: shown.map(h => h.ticker),
+            datasets: [{ label: "Price return", data: shown.map(h => h.return_pct),
+                         backgroundColor: shown.map(h => h.return_pct >= 0 ? "#4ade80" : "#fb7185"),
+                         borderRadius: 4 }],
+        }, { indexAxis: "y", plugins: { legend: { display: false },
+              tooltip: { callbacks: { label: c => `${c.parsed.x.toFixed(2)}%` } } },
+              scales: { x: { ticks: { color: "#888", callback: v => `${v}%` }, grid: { color: "#282828" } },
+                        y: { ticks: { color: "#bbb" }, grid: { display: false } } } });
+        note.textContent = `Top and bottom performers by share-price return (${period}). ${info.missing_tickers?.length ? "Missing prices: " + info.missing_tickers.join(", ") + "." : ""}`;
+        // The unified holdings table uses the same period as the gainers chart.
+        updateAllocation(info);
+    } catch (error) {
+        note.textContent = `Gainers/losers unavailable: ${error.message}`;
+    }
+}
+
+function initializeAnalytics() {
+    initializePerformanceSelector();
+    initializeGainersSelector();
+    updatePerformance();
+    updateGainers();
+}
+function initializePerformanceSelector() {
+    selector("performancePeriods", PERFORMANCE_PERIODS, performancePeriod, period => {
+        performancePeriod = period; initializePerformanceSelector(); updatePerformance();
+    });
+}
+function initializeGainersSelector() {
+    selector("gainerPeriods", GAINER_PERIODS, gainerPeriod, period => {
+        gainerPeriod = period; initializeGainersSelector(); updateGainers();
+    });
+}
+// Refresh also clears short-lived browser request memoization.
+elements.refreshButton.addEventListener("click", () => {
+    analyticsRequests.clear();
+    updatePerformance();
+    updateGainers();
+});
