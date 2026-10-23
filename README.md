@@ -1,157 +1,227 @@
-# 📈 Marks Portfolio & Market Monitor Pipeline
+# Marks Portfolio & Market Monitor
 
-An automated GitHub Actions tracking pipeline for live stock price alerts, market sentiment monitoring, and portfolio management with Discord notifications.
+A Python automation project that monitors stock price targets and valuation multiples, posts alerts and a compact watchlist to Discord, tracks portfolio transactions and earnings, and checks selected market/economic indicators. GitHub Actions runs the scheduled workflows, so a personal computer does not need to stay on.
 
----
+> Market data comes from Yahoo Finance through `yfinance` and may be missing, delayed, or revised. Alerts are notifications, not trade execution or financial advice.
 
-## 📊 What We Are Monitoring
+## Contents
 
-### 1. Stock Price Target Watchlist (`alerts/watchlist.json`)
-Continuously tracks individual stock price targets using live `yfinance` market data during market hours.
-* **Price Execution:** Triggers when a ticker's intraday low (`dayLow`) touches or breaches your specified target level.
-* **Auto-Removal:** Once a target level is hit, an alert posts to Discord (`#stock-alerts`) and the target is automatically removed from `watchlist.json` via GitHub Actions bot.
-* **International Support:** Supports international symbols using exchange suffixes (e.g., `ZAP.OL` for Zaptec ASA on Oslo Børs).
+- [Features](#features)
+- [Price and valuation alerts](#price-and-valuation-alerts)
+- [Discord watchlist](#discord-watchlist)
+- [Manage watchlist targets](#manage-watchlist-targets)
+- [GitHub setup](#github-setup)
+- [Workflows](#workflows)
+- [Portfolio and other monitors](#portfolio-and-other-monitors)
+- [Run locally](#run-locally)
+- [Troubleshooting](#troubleshooting)
+- [Project structure](#project-structure)
 
-### 2. Watchlist Manager (GitHub UI)
-You can now add/remove price targets directly from the GitHub Actions UI – no manual JSON editing.
+## Features
 
-**How to Use**
-Go to the Actions tab.
+- Multiple price targets per ticker.
+- Valuation alerts for trailing P/E (`PE`), forward P/E (`FxPE`), and price-to-sales (`P/S`).
+- Discord watchlist with price, targets, valuation metrics, and year-over-year revenue growth.
+- Portfolio BUY/SELL transaction updates and portfolio summaries.
+- Earnings report workflow for tracked portfolio holdings.
+- Market sentiment/VIX, selected US economic data, and workflow heartbeat notifications.
+- JSON-based configuration and state committed to the repository by GitHub Actions.
 
-Select Watchlist Manager from the left sidebar.
+## Price and valuation alerts
 
-Click Run workflow.
+The watchlist is stored in `alerts/watchlist.json`. A ticker can have price targets, valuation targets, or both. Example:
 
-Choose an action:
+```json
+{
+  "MA": {
+    "price_targets": [],
+    "valuation_targets": {
+      "FxPE": [35]
+    }
+  }
+}
+```
 
-ADD – add a target price for a ticker (e.g., NVDA + 150.00).
+Supported metrics:
 
-REMOVE – remove a specific target.
+| Metric | Data field | Trigger rule |
+|---|---|---|
+| `PRICE` | Intraday low when available; otherwise latest price | Alert when price is at or below target |
+| `PE` | Yahoo Finance `trailingPE` | Alert when the multiple is at or above target |
+| `FxPE` | Yahoo Finance `forwardPE` | Alert when the multiple is at or above target |
+| `P/S` | Yahoo Finance `priceToSalesTrailing12Months` | Alert when the multiple is at or above target |
 
-REMOVE_ALL – remove all targets for a ticker.
+For example, `FxPE = 35` means an alert when forward P/E is 35x or higher. The monitor can alert on its next run if the multiple is already above the target; it does not need to observe the exact moment the multiple crosses the threshold.
 
-LIST – print the current watchlist to the logs (no commit).
+**Delivery safeguards:** a triggered target is removed only after Discord returns HTTP 200 or 204. If the webhook fails, or the relevant data is unavailable, the target remains in the watchlist for a later attempt. Targets are handled individually, so a successful alert does not remove unrelated targets for the same ticker.
 
-Fill in the required fields and run.
+Valuation checks only run for tickers with valuation targets, helping limit requests to Yahoo Finance. The display in the Watchlist Manager separately retrieves the latest available multiples for all listed tickers.
 
-The changes are automatically committed and pushed – the next stock check will use the updated watchlist.
+## Discord watchlist
 
-### 3. Market Sentiment & Volatility (`alerts/sentiment_alert.py`)
-Monitors overall market health and risk sentiment, posting alerts directly to Discord (`#sentiment-alerts`):
+The Watchlist Manager's `STATUS` action posts the watchlist as one Discord message/table, not a separate message per ticker. Columns include:
 
-* **CNN Fear & Greed Index:**
-  Queries CNN's live sentiment engine to alert on market extreme conditions:
-  * **Extreme Fear ($\le 25$):** Signals potential buying/oversold opportunities.
-  * **Extreme Greed ($\ge 75$):** Signals heightened market euphoria or potential risk.
+- **Ticker** and **Price**
+- **Targets** — configured price targets and valuation target thresholds
+- **PE** — trailing price-to-earnings
+- **FwdPE** — forward price-to-earnings
+- **P/S** — trailing price-to-sales
+- **Rev YoY** — year-over-year revenue growth, when supplied by Yahoo Finance
 
-* **CBOE Volatility Index (VIX):**
-  Monitors intraday spikes and drops across key thresholds using **directional hysteresis** to avoid duplicate alerts:
-  * **Downward levels (10, 12, 15):** Alerts when VIX crosses *below* the level. After a first alert, a new alert for that level is only allowed after VIX has **risen above** `level + 2.0` (e.g., after crossing 15, VIX must first rise above 17 before another 15 alert can fire).
-  * **Upward levels (25, 30, 35, 40, 45, 50):** Alerts when VIX crosses *above* the level. After an alert, a new alert requires VIX to **drop below** `level - 2.0` first (e.g., after crossing 25, VIX must fall below 23 to re‑arm).
-  * Each level can alert **at most once per UTC day**, dramatically reducing noise while still capturing meaningful swings.
+A `—` means the provider did not return a usable value; it does not mean zero. `Rev YoY` is shown as a percentage and can be negative. Long tables may require horizontal scrolling on narrow Discord clients, but all tickers remain in the same table/post where Discord message limits permit.
 
-### 4. US Economic Data Monitor (alerts/economic_alert.py)
-Fetches key US economic indicators from the FRED API (Federal Reserve) and posts updates to Discord (#sentiment-alerts) when new data is released.
+## Manage watchlist targets
 
-Indicators tracked:
+### GitHub Actions UI
 
-Unemployment Rate
+1. Open the repository's **Actions** tab.
+2. Select **Watchlist Manager**.
+3. Click **Run workflow**.
+4. Select the action and enter the ticker, target, and metric requested by the workflow form.
+5. Run `STATUS` to post the full watchlist to Discord.
 
-CPI (All Urban Consumers)
+The workflow form is the recommended way to manage targets. The supported metric identifiers are `PRICE`, `PE`, `FxPE`, and `P/S`; use the exact metric label offered by the workflow.
 
-GDP Growth Rate (quarter‑over‑quarter, annualised – shown as a percentage)
+### Command line
 
-Core PCE Price Index
+From the repository root, install dependencies first, then use examples like:
 
-Nonfarm Payrolls
+```bash
+# Add a price target
+python alerts/watchlist_manager.py ADD AMD 560 PRICE
 
-Initial Jobless Claims (weekly)
+# Add a forward P/E target for Mastercard
+python alerts/watchlist_manager.py ADD MA 35 FxPE
 
-What you see in Discord:
+# Add trailing P/E or price-to-sales thresholds
+python alerts/watchlist_manager.py ADD MSFT 40 PE
+python alerts/watchlist_manager.py ADD AMZN 5 'P/S'
 
-Current value (formatted with % for rates/growth, whole numbers for payrolls/claims)
+# Remove a specific target
+python alerts/watchlist_manager.py REMOVE MA 35 FxPE
 
-Previous value (for trend context)
+# List stored targets or post the full watchlist
+python alerts/watchlist_manager.py LIST
+python alerts/watchlist_manager.py STATUS
+```
 
-Change with an up/down arrow (🟢 / 🔴 / ⚪)
+Check `python alerts/watchlist_manager.py --help` or the script's argument parser if your checked-out version exposes different CLI syntax. Do not manually edit JSON while a workflow that writes the same file is running.
 
-Data source (FRED)
+## GitHub setup
 
-How it avoids spam: Stores the last date and value per series – only alerts when a new release or revision is detected.
+### Repository secrets
 
-Cost: Free – uses only the FRED API (no paid data sources).
+Add secrets under **Settings → Secrets and variables → Actions**. Use the exact names referenced by each workflow file. The stock monitor expects:
 
+- `DISCORD_STOCK_WEBHOOK` — Discord webhook for price and valuation alerts.
+- `DISCORD_SENTIMENT_WEBHOOK` — webhook for market sentiment alerts.
 
----
+Other workflows may require additional webhook or data-provider secrets; inspect the `env:` sections of the corresponding YAML files and add only the secrets they reference. Never commit webhook URLs or API keys to the repository.
 
-## 🛠️ Portfolio Management Guide (GitHub Web GUI)
+### Permissions
 
-All portfolio holdings and buy prices are stored inside `portfolio/marks_portfolio.json`. You can manage your entire portfolio and push live updates directly from **GitHub.com** without running local terminal commands.
+Workflows that commit JSON state need repository Actions permissions that allow content writes. Under **Settings → Actions → General → Workflow permissions**, enable read and write permissions if required by your repository policy. Branch protection rules may also affect automated pushes.
 
-### How to Run Portfolio Actions via GitHub Web
+## Workflows
 
-1. Go to the **Actions** tab at the top of your GitHub repository.
-2. In the left sidebar, click **Marks Portfolio Manager** (from `.github/workflows/portfolio_summary.yml`).
-3. Click the **Run workflow** dropdown button on the right side.
+Workflow schedules and names can change; the YAML files under `.github/workflows/` are the source of truth. In the uploaded project, the principal workflows include:
 
----
+| Workflow file | Purpose |
+|---|---|
+| `stock_checker.yml` | Scheduled price and valuation scanning plus sentiment monitoring; commits changed watchlist/sentiment state |
+| `watchlist_manager.yml` | Manually manage targets and post the current watchlist |
+| `portfolio_summary.yml` | Manually run portfolio status and transaction actions |
+| `earnings_report.yml` | Generate earnings reports for tracked holdings |
+| `economic_alert.yml` | Monitor selected US economic releases and Fed updates |
+| `heartbeat.yml` | Send a scheduled heartbeat message |
 
-### Available Modes in the Dropdown Form
+GitHub Actions scheduled workflows may run later than the exact cron time during periods of high load. Check the latest workflow run and its logs when troubleshooting.
 
-#### Option A: Post Status Summary (`STATUS`)
-* **Select Action:** `STATUS`
-* **Ticker / Shares / Price:** Leave completely blank.
-* **What Happens:** Queries live market prices for all holdings in `portfolio/marks_portfolio.json`, regenerates the donut allocation chart (showing position weights and individual returns without total dollar amounts), and posts the overview to `#marks-portfolio`.
+## Portfolio and other monitors
 
-#### Option B: Log a Buy Trade (`BUY`)
-* **Select Action:** `BUY`
-* **Ticker:** Enter symbol (e.g., `APP`, `AMZN`)
-* **Shares:** Enter number of shares purchased (e.g., `5`)
-* **Price:** Enter average fill price (e.g., `300.00`)
-* **What Happens:** Recalculates position weights, regenerates the chart, posts a BUY notification to Discord, and automatically commits `portfolio/marks_portfolio.json` back to your GitHub repository.
+- **Portfolio manager:** uses `portfolio/marks_portfolio.json` and `portfolio/marks_portfolio_update.py` for portfolio status and BUY/SELL actions. Review transaction and cost-basis behavior before relying on reported performance.
+- **Earnings reports:** `portfolio/earnings_report.py` produces earnings-related updates for tracked holdings. Availability and estimates depend on the upstream data source.
+- **Market sentiment:** `alerts/sentiment_alert.py` checks configured sentiment/VIX conditions and records state in `alerts/sentiment_state.json`.
+- **Economic monitor:** `alerts/economic_alert.py` checks configured economic/Federal Reserve data and uses `alerts/economic_state.json` to track state.
+- **Heartbeat:** `alerts/heartbeat.py` sends a basic scheduled workflow notification.
 
-#### Option C: Log a Sell Trade (`SELL`)
-* **Select Action:** `SELL`
-* **Ticker:** Enter symbol (e.g., `META`)
-* **Shares:** Enter number of shares sold (e.g., `2`)
-* **Price:** Enter execution price (e.g., `525.00`)
-* **What Happens:** Adjusts share count, updates remaining position weights, posts a SELL notification to Discord, and commits changes back to your repository.
+The project sends notifications and updates its local JSON ledger. It does not connect to a brokerage, submit orders, or guarantee execution prices.
 
----
+## Run locally
 
-## ⚙️ Environment Secrets
+Requires Python 3.11 or a compatible version and internet access for Yahoo Finance/Discord requests.
 
-Required GitHub Repository Secrets (`Settings` → `Secrets and variables` → `Actions`):
+```bash
+python -m venv .venv
+# Windows PowerShell:
+.venv\Scripts\Activate.ps1
+# macOS/Linux:
+# source .venv/bin/activate
 
-| Secret Name | Purpose |
-|-------------|---------|
-| `DISCORD_STOCK_WEBHOOK` | Stock price target alert channel |
-| `DISCORD_SENTIMENT_WEBHOOK` | Market sentiment & VIX alert channel |
-| `DISCORD_PORTFOLIO_WEBHOOK` | Marks Portfolio updates channel |
-| `DISCORD_PORTFOLIO_TEST_WEBHOOK | Heartbeat monitor channel – used by `alerts/heartbeat.py` |
+pip install requests yfinance
+```
 
----
+Set the relevant environment variables before running any script that posts to Discord. For example, in PowerShell for the current terminal session:
 
-## 📂 Repository Structure
+```powershell
+$env:DISCORD_STOCK_WEBHOOK = "your-webhook-url"
+python alerts/stock_alert.py
+```
+
+Run `python alerts/watchlist_manager.py STATUS` to post the watchlist. Keep webhook URLs private and avoid including them in screenshots or logs shared publicly.
+
+## Troubleshooting
+
+### A price target did not alert
+
+1. Open **Actions → Stock & Sentiment Alert Pipeline** and inspect the latest run logs.
+2. Confirm the ticker and target exist in `alerts/watchlist.json`.
+3. Confirm `DISCORD_STOCK_WEBHOOK` is configured and points to the intended channel.
+4. Remember that price alerts use the intraday low when available; otherwise the latest price is used.
+
+### A valuation target did not alert
+
+1. Confirm the ticker has a target under `valuation_targets` and the metric key is exactly `PE`, `FxPE`, or `P/S`.
+2. Confirm Yahoo Finance provides a positive value for the corresponding field (`trailingPE`, `forwardPE`, or `priceToSalesTrailing12Months`).
+3. Valuation alerts trigger at-or-above the threshold; price alerts trigger at-or-below the target.
+4. Check the workflow logs for provider or Discord errors. Missing data does not trigger an alert and does not delete the target.
+
+### A valuation or revenue-growth cell displays `—`
+
+Yahoo Finance may not provide that field for a particular ticker or response. The project treats unavailable data as missing, not as zero.
+
+### A ticker's price is `N/A`
+
+Check the ticker symbol and exchange suffix. International symbols (for example, `.OL`) may not resolve consistently through Yahoo Finance.
+
+### Discord did not receive a message
+
+Verify the relevant secret name and webhook URL, inspect the step logs, and run the Watchlist Manager `STATUS` action to test the watchlist webhook path. A successful HTTP response means Discord accepted the webhook request; it does not verify how the client displayed the message.
+
+### GitHub Actions cannot commit JSON changes
+
+Check workflow permissions, branch protection, and whether another workflow is writing to the same file. Resolve push conflicts before rerunning.
+
+## Project structure
 
 ```text
-stock-alerts/
-│
-├── .github/
-│   └── workflows/
-│       ├── stock_checker.yml        # Runs every 15 min, 07:00-21:00 UTC, Mon-Fri
-│       ├── portfolio_summary.yml    # Portfolio management (STATUS, BUY, SELL)
-│       └── watchlist_manager.yml    # Add/remove watchlist targets via UI
-│
-├── portfolio/
-│   ├── marks_portfolio.json         # Live holdings, transactions, realised P&L
-│   └── marks_portfolio_update.py    # Portfolio manager & pie chart generator
-│
+stock-alerts-main/
+├── .github/workflows/       # GitHub Actions schedules and manual workflows
 ├── alerts/
-│   ├── watchlist.json               # Stock price targets
-│   ├── stock_alert.py               # Checks targets, posts alerts, auto-removes
-│   ├── sentiment_alert.py           # CNN Fear & Greed + VIX monitor with hysteresis
-│   ├── sentiment_state.json         # Persistent VIX & Fear/Greed state (auto‑committed)
-│   └── heartbeat.py                 # Daily system heartbeat (scheduled at 14:30 UTC)
-│
-└── README.md
+│   ├── stock_alert.py       # Price and valuation alert scanner
+│   ├── watchlist_manager.py # Watchlist targets and Discord table
+│   ├── watchlist.json       # Watchlist targets
+│   ├── sentiment_alert.py   # Sentiment/VIX monitor
+│   ├── sentiment_state.json # Sentiment state
+│   ├── economic_alert.py    # Economic data monitor
+│   ├── economic_state.json # Economic monitor state
+│   └── heartbeat.py         # Workflow heartbeat
+└── portfolio/
+    ├── marks_portfolio.json
+    ├── marks_portfolio_update.py
+    └── earnings_report.py
+```
+
+---
+
+*Use the alerts as monitoring aids only. Verify the underlying data and make investment decisions independently.*
