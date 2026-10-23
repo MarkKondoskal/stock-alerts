@@ -14,9 +14,6 @@ const elements = {
 
     holdingsBody: document.getElementById("holdingsBody"),
     watchlistBody: document.getElementById("watchlistBody"),
-
-    holdingCount: document.getElementById("holdingCount"),
-    allocationBasis: document.getElementById("allocationBasis"),
     watchlistCount: document.getElementById("watchlistCount"),
 
     refreshButton: document.getElementById("refreshPublic"),
@@ -189,8 +186,6 @@ for (const [tab, name] of [
 function renderHoldings(payload) {
     const holdings = asArray(payload, ["holdings", "portfolio", "positions", "data"]);
     const meta = payload && !Array.isArray(payload) ? payload : {};
-    elements.holdingCount.textContent = String(meta.position_count ?? holdings.length);
-    elements.allocationBasis.textContent = meta.allocation_basis || "Cost basis";
     elements.holdingsBody.innerHTML = holdings.length ? [...holdings]
         .sort((a,b) => (b.allocation_pct || 0) - (a.allocation_pct || 0))
         .map(h => holdingRow(h)).join("")
@@ -594,8 +589,6 @@ function doughnut(id, names, values) {
 
 function updateAllocation(info) {
     if (Array.isArray(info.holdings)) {
-        elements.holdingCount.textContent = String(info.holdings.length);
-        elements.allocationBasis.textContent = "Market value";
         renderHoldings({ positions: info.holdings, position_count: info.holdings.length,
                          allocation_basis: "Market value" });
         if (window.Chart) {
