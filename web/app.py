@@ -722,6 +722,23 @@ def public_analytics_get():
         return jsonify({"error": "Could not load market analytics."}), 502
 
 
+@app.get("/api/public/analytics/snapshot")
+def public_analytics_snapshot_get():
+    """Fixed current allocations and holdings, public safe fields only."""
+    try:
+        from public_analytics import get_public_snapshot
+        portfolio, _ = get_file("portfolio/marks_portfolio.json", data=True)
+        if not isinstance(portfolio, dict):
+            return jsonify({"error": "Invalid portfolio data."}), 502
+        response = jsonify(get_public_snapshot(portfolio))
+        response.headers["Cache-Control"] = "public, max-age=60"
+        return response
+    except (requests.RequestException, RuntimeError, ValueError, TypeError,
+            KeyError, ImportError):
+        app.logger.exception("Could not load public analytics snapshot")
+        return jsonify({"error": "Could not load portfolio snapshot."}), 502
+
+
 @app.get("/api/public/workflows")
 def public_workflows_get():
     """Publish workflow status and run timestamps only."""

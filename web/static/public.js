@@ -198,7 +198,7 @@ function renderHoldings(payload) {
 }
 
 function holdingRow(h) {
-    const allocation = Number(h.allocation_pct) || 0;
+    const allocation = h.allocation_pct == null ? null : Number(h.allocation_pct);
     const price = h.current_price === null || h.current_price === undefined ? "—" : formatPrice(h.current_price);
     // Holdings table always shows return against recorded per-share cost,
     // not the selectable period from the gainers/losers bar chart.
@@ -214,8 +214,8 @@ function holdingRow(h) {
         <td>${escapeHtml(h.sector || "—")}</td>
         <td class="public-number">${formatPrice(h.cost_per_share ?? h.avg_price)}</td>
         <td class="public-number">${price}</td>
-        <td><div class="public-allocation"><span class="public-number">${formatNumber(allocation)}%</span>
-            <div class="public-allocation-track"><div class="public-allocation-fill" style="width:${Math.max(0, Math.min(100,allocation))}%"></div></div></div></td>
+        <td><div class="public-allocation"><span class="public-number">${allocation === null ? "—" : `${formatNumber(allocation)}%`}</span>
+            <div class="public-allocation-track"><div class="public-allocation-fill" style="width:${Math.max(0, Math.min(100,allocation || 0))}%"></div></div></div></td>
         <td class="public-number ${gainClass}">${gainText}</td>
     </tr>`;
 }
@@ -405,37 +405,14 @@ async function loadDashboard() {
     setLoading(true);
     showMessage("");
 
-    const results = await Promise.allSettled([
-        fetchJson(API.portfolio),
-        fetchJson(API.watchlist),
-    ]);
-
+    const [watchlistResult] = await Promise.allSettled([fetchJson(API.watchlist)]);
     const errors = [];
 
-    if (results[0].status === "fulfilled") {
-        cachedPortfolio = results[0].value;
-        renderHoldings(cachedPortfolio);
-    } else {
-        console.error("Could not load public holdings:", results[0].reason);
-
-        elements.holdingsBody.innerHTML = `
-            <tr>
-                <td colspan="6" class="public-empty">
-                    Could not load holdings. Please try refreshing.
-                </td>
-            </tr>
-        `;
-
-        elements.holdingCount.textContent = "—";
-        elements.allocationBasis.textContent = "—";
-        errors.push("holdings");
-    }
-
-    if (results[1].status === "fulfilled") {
-        cachedWatchlist = results[1].value;
+    if (watchlistResult.status === "fulfilled") {
+        cachedWatchlist = watchlistResult.value;
         renderWatchlist(cachedWatchlist);
     } else {
-        console.error("Could not load public watchlist:", results[1].reason);
+        console.error("Could not load public watchlist:", watchlistResult.reason);
 
         elements.watchlistBody.innerHTML = `
             <tr>
@@ -472,6 +449,7 @@ activateTab("holdings");
 loadDashboard();
 
 
+
 /* -------------------------
    Analytics, read-only endpoints
 ------------------------- */
@@ -481,8 +459,7 @@ const analyticsCharts = {};
 const analyticsRequests = new Map();
 let performancePeriod = "1M";
 let gainerPeriod = "1M";
-const ALLOCATION_PERIOD = "1M"; // Fixed data source; independent of both chart selectors.
-let lastAllocation = null;
+const SNAPSHOT_API = "/api/public/analytics/snapshot"; // Not a selectable period.
 
 const colors = ["#60a5fa", "#34d399", "#fbbf24", "#f472b6", "#a78bfa", "#fb923c",
     "#2dd4bf", "#818cf8", "#f87171", "#bef264", "#38bdf8", "#e879f9"];
@@ -573,7 +550,7 @@ function doughnut(id, names, values) {
 }
 
 function updateAllocation(info) {
-    if (info.holdings?.length) {
+    if (Array.isArray(info.holdings)) {
         elements.holdingCount.textContent = String(info.holdings.length);
         elements.allocationBasis.textContent = "Market value";
         renderHoldings({ positions: info.holdings, position_count: info.holdings.length,
@@ -610,14 +587,18 @@ async function updateGainers() {
     }
 }
 
+let snapshotRequestId = 0;
 async function loadFixedAllocation() {
+    const requestId = ++snapshotRequestId;
     try {
         // Always use the same snapshot source, regardless of either chart's period.
-        const info = await analyticsFor(ALLOCATION_PERIOD);
-        lastAllocation = info;
-        updateAllocation(info);
+        const info = await fetchJson(SNAPSHOT_API);
+        if (requestId === snapshotRequestId) updateAllocation(info);
     } catch (error) {
         console.error("Could not load fixed allocation:", error);
+        if (requestId === snapshotRequestId) {
+            elements.holdingsBody.innerHTML = `<tr><td colspan="6" class="public-empty">Current holdings unavailable. Refresh to retry.</td></tr>`;
+        }
     }
 }
 

@@ -69,7 +69,7 @@ def _load_history(tickers, start, intraday):
                 if value > 0:
                     # Intraday timestamps are ISO UTC; daily are date-only.
                     if intraday:
-                        ts = stamp.isoformat()
+                        ts = stamp.tz_convert("UTC").isoformat() if getattr(stamp, "tzinfo", None) else stamp.isoformat()
                     else:
                         ts = stamp.date().isoformat()
                     vals[ts] = value
@@ -115,45 +115,127 @@ def _starting_day(period, trades):
 
 
 def _daily_series(history, positions, start):
-    # Returns normalized to 0% on the first common trading date. Historical
-    # holdings are inferred only where individual transaction records exist.
-    price_dates = sorted(set(history.get("SPY", {})))
-    available = [d for d in price_dates if d >= start.isoformat()]
-    if len(available) < 2:
+    """Mark-to-market weighted price return, with SPY on identical valid dates.
+
+    This is an invested-holdings proxy, not account TWR. When any held
+    position is missing quotes, that observation is skipped rather than
+    assuming a 0% return or silently dropping the missing holding.
+    """
+    spy_prices = history.get("SPY", {})
+    spy_dates = sorted(d for d in spy_prices if d >= start.isoformat())
+    if len(spy_dates) < 2:
         return [], [], []
-    valid = [t for t in positions if t in history]
-    portfolio_return, spy_return = 100.0, 100.0
-    lines, benchmark = [], []
-    for i, day in enumerate(available):
-        if i == 0:
-            lines.append({"date": day, "value": 0.0})
-            benchmark.append({"date": day, "value": 0.0})
+
+    def units_at(ticker, day):
+        tx = positions[ticker]["trades"]
+        return sum(delta for d, delta in tx if d <= day)
+
+    eligible = []
+    for day in spy_dates:
+        date_obj = date.fromisoformat(day)
+        active = [(ticker, units_at(ticker, date_obj)) for ticker in positions]
+        active = [(ticker, units) for ticker, units in active if units > 0]
+        if not active or any(day not in history.get(ticker, {}) for ticker, _ in active):
             continue
-        prev = available[i-1]
-        prev_spy = history["SPY"].get(prev)
-        now_spy = history["SPY"].get(day)
-        if prev_spy and now_spy:
-            spy_return *= now_spy / prev_spy
-        weighted, total = 0.0, 0.0
-        prev_date = date.fromisoformat(prev)
-        for ticker in valid:
-            prices = history[ticker]
-            if prev not in prices or day not in prices:
+        eligible.append((day, active))
+
+    if len(eligible) < 2:
+        return [], [], []
+    first_day, _ = eligible[0]
+    first_spy = spy_prices[first_day]
+    level = 100.0
+    portfolio = [{"date": first_day, "value": 0.0}]
+    benchmark = [{"date": first_day, "value": 0.0}]
+    previous_day, previous_active = eligible[0]
+    for day, active in eligible[1:]:
+        # Only positions actually held over the preceding interval count.
+        # Do not turn buys/deposits into apparent investment gains.
+        weights = []
+        for ticker, units in previous_active:
+            # A security must have been priced at both observation dates.
+            if day not in history.get(ticker, {}):
                 continue
-            p0, p1 = prices[prev], prices[day]
-            trades = positions[ticker]["trades"]
-            # No reconstructed history for tickers without dated transactions.
-            units = sum(delta for tx_date, delta in trades if tx_date <= prev_date)
-            if units <= 0:
+            old = history[ticker][previous_day]
+            new = history[ticker][day]
+            weights.append((units * old, new / old - 1))
+        denominator = sum(w for w, _ in weights)
+        if denominator <= 0 or len(weights) != len(previous_active):
+            # No defensible return available for this interval.
+            previous_day, previous_active = day, active
+            continue
+        level *= 1 + sum(w * r for w, r in weights) / denominator
+        portfolio.append({"date": day, "value": round(level - 100, 3)})
+        benchmark.append({"date": day, "value": round((spy_prices[day] / first_spy - 1) * 100, 3)})
+        previous_day, previous_active = day, active
+    return portfolio, benchmark, list(positions)
+
+
+def get_public_snapshot(portfolio):
+    """Fixed current-holdings snapshot; never depends on chart selections."""
+    positions = _positions(portfolio)
+    if not positions:
+        return {"holdings": [], "sectors": [], "basis": "latest market value"}
+    fingerprint = tuple(sorted((t, p["shares"], p["cost"]) for t, p in positions.items()))
+    key = ("SNAPSHOT", fingerprint)
+    with _lock:
+        cached = _cache.get(key)
+        if cached and time.time() - cached[0] < 300:
+            return cached[1]
+    import yfinance as yf
+    import pandas as pd
+    tickers = sorted(positions)
+    raw = yf.download(tickers, period="5d", interval="1d", auto_adjust=True,
+                      progress=False, threads=True, group_by="ticker")
+    prices = {}
+    if raw is not None and not raw.empty:
+        for ticker in tickers:
+            try:
+                if isinstance(raw.columns, pd.MultiIndex):
+                    values = (raw[ticker]["Close"] if ticker in raw.columns.get_level_values(0)
+                              else raw["Close"][ticker])
+                else:
+                    values = raw["Close"] if len(tickers) == 1 else None
+                if values is not None:
+                    valid = [float(v) for v in values.dropna().tolist()
+                             if math.isfinite(float(v)) and float(v) > 0]
+                    if valid:
+                        prices[ticker] = valid[-1]
+            except (KeyError, ValueError, TypeError):
                 continue
-            weight = units * p0
-            total += weight
-            weighted += weight * (p1 / p0 - 1)
-        if total > 0:
-            portfolio_return *= 1 + weighted / total
-        lines.append({"date": day, "value": round((portfolio_return - 100), 3)})
-        benchmark.append({"date": day, "value": round((spy_return - 100), 3)})
-    return lines, benchmark, valid
+    holdings = []
+    values = {}
+    sectors = defaultdict(float)
+    for ticker, position in positions.items():
+        price = prices.get(ticker)
+        sector = SECTORS.get(ticker, "Other / unclassified")
+        if price is not None:
+            value = position["shares"] * price
+            values[ticker] = value
+            sectors[sector] += value
+        cost = position["cost"]
+        holdings.append({
+            "ticker": ticker, "sector": sector,
+            "cost_per_share": round(cost, 2),
+            "current_price": round(price, 2) if price is not None else None,
+            "return_since_cost_pct": round((price / cost - 1) * 100, 2)
+                if price is not None and cost > 0 else None,
+        })
+    total = sum(values.values())
+    for holding in holdings:
+        amount = values.get(holding["ticker"])
+        holding["allocation_pct"] = round(amount / total * 100, 2) if amount is not None and total else None
+    holdings.sort(key=lambda x: (x["allocation_pct"] is None, -(x["allocation_pct"] or 0)))
+    result = {
+        "holdings": holdings,
+        "sectors": [{"sector": s, "allocation_pct": round(v / total * 100, 2)}
+                    for s, v in sorted(sectors.items(), key=lambda item: -item[1])],
+        "basis": "latest market value",
+        "as_of": datetime.now(timezone.utc).isoformat(),
+        "missing_tickers": sorted(set(positions) - set(values)),
+    }
+    with _lock:
+        _cache[key] = (time.time(), result)
+    return result
 
 
 def _intraday_series(history, positions):
