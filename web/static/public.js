@@ -455,6 +455,11 @@ const GAINER_PERIODS = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y"];
 const analyticsCharts = {};
 const analyticsRequests = new Map();
 let selectedAccount = "combined";
+const ACCOUNT_LABELS = { combined: "Combined", us: "US · Merrill", dk: "DK · Nordnet" };
+function setAccountStatus(message) {
+    const status = document.getElementById("accountStatus");
+    if (status) status.textContent = message;
+}
 let accountGeneration = 0;
 let performancePeriod = "YTD";
 let gainerPeriod = "1M";
@@ -640,10 +645,14 @@ async function loadFixedAllocation() {
     try {
         // Dedicated current snapshot: never depend on chart period.
         const info = await fetchJson(`${SNAPSHOT_API}?account=${encodeURIComponent(account)}`);
-        if (requestId === snapshotRequestId && account === selectedAccount) updateAllocation(info);
+        if (requestId === snapshotRequestId && account === selectedAccount) {
+            updateAllocation(info);
+            setAccountStatus(`Showing ${ACCOUNT_LABELS[account]} holdings`);
+        }
     } catch (error) {
         console.error("Could not load fixed allocation:", error);
         if (requestId === snapshotRequestId) {
+            setAccountStatus(`Could not load ${ACCOUNT_LABELS[account]} holdings. Try Refresh data.`);
             elements.holdingsBody.innerHTML = `<tr><td colspan="6" class="public-empty">Current holdings unavailable. Refresh to retry.</td></tr>`;
         }
     }
@@ -677,6 +686,7 @@ elements.refreshButton.addEventListener("click", () => {
 function selectAccount(account) {
     if (!['combined', 'us', 'dk'].includes(account) || selectedAccount === account) return;
     selectedAccount = account;
+    setAccountStatus(`Loading ${ACCOUNT_LABELS[account]} holdings and performance…`);
     accountGeneration++;
     snapshotRequestId++;
     analyticsRequests.clear();
