@@ -40,15 +40,15 @@ def _load_history(tickers, start, intraday):
     tickers = sorted(set(tickers) | {"SPY"})
     if intraday == "1D":
         raw = yf.download(tickers, period="1d", interval="5m", auto_adjust=False,
-                          progress=False, threads=True, group_by="ticker")
+                          progress=False, threads=False, group_by="ticker")
     elif intraday == "1W":
         raw = yf.download(tickers, period="5d", interval="60m", auto_adjust=False,
-                          progress=False, threads=True, group_by="ticker")
+                          progress=False, threads=False, group_by="ticker")
     else:
         raw = yf.download(tickers, start=start.isoformat(),
                           end=(date.today() + timedelta(days=1)).isoformat(),
                           interval="1d", auto_adjust=False, progress=False,
-                          threads=True, group_by="ticker")
+                          threads=False, group_by="ticker")
     if raw is None or raw.empty:
         return {}
     output = {}
@@ -185,7 +185,7 @@ def get_public_snapshot(portfolio):
     import pandas as pd
     tickers = sorted(positions)
     raw = yf.download(tickers, period="5d", interval="1d", auto_adjust=False,
-                      progress=False, threads=True, group_by="ticker")
+                      progress=False, threads=False, group_by="ticker")
     prices = {}
     if raw is not None and not raw.empty:
         for ticker in tickers:

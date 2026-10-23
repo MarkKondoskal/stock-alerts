@@ -73,14 +73,15 @@ function formatNumber(value, decimals = 2) {
     });
 }
 
-function formatPrice(value) {
+function formatPrice(value, currency = "USD") {
+    if (value === null || value === undefined || value === "") return "—";
     const number = Number(value);
 
     if (!Number.isFinite(number)) {
         return "—";
     }
 
-    return "$" + formatNumber(number, 2);
+    return currency === "DKK" ? `${formatNumber(number, 2)} kr` : "$" + formatNumber(number, 2);
 }
 
 function showMessage(message, isError = false) {
@@ -194,7 +195,8 @@ function renderHoldings(payload) {
 
 function holdingRow(h) {
     const allocation = h.allocation_pct == null ? null : Number(h.allocation_pct);
-    const price = h.current_price === null || h.current_price === undefined ? "—" : formatPrice(h.current_price);
+    const currency = h.currency === "DKK" ? "DKK" : "USD";
+    const price = formatPrice(h.current_price, currency);
     // Holdings table always shows return against recorded per-share cost,
     // not the selectable period from the gainers/losers bar chart.
     const cost = Number(h.cost_per_share ?? h.avg_price);
@@ -207,7 +209,7 @@ function holdingRow(h) {
     return `<tr>
         <td class="public-ticker">${escapeHtml(h.ticker || "—")}</td>
         <td>${escapeHtml(h.sector || "—")}</td>
-        <td class="public-number">${formatPrice(h.cost_per_share ?? h.avg_price)}</td>
+        <td class="public-number">${formatPrice(h.cost_per_share ?? h.avg_price, currency)}</td>
         <td class="public-number">${price}</td>
         <td><div class="public-allocation"><span class="public-number">${allocation === null ? "—" : `${formatNumber(allocation)}%`}</span>
             <div class="public-allocation-track"><div class="public-allocation-fill" style="width:${Math.max(0, Math.min(100,allocation || 0))}%"></div></div></div></td>
@@ -452,7 +454,9 @@ const PERFORMANCE_PERIODS = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "3Y", "A
 const GAINER_PERIODS = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y"];
 const analyticsCharts = {};
 const analyticsRequests = new Map();
-let performancePeriod = "1M";
+let selectedAccount = "combined";
+let accountGeneration = 0;
+let performancePeriod = "YTD";
 let gainerPeriod = "1M";
 const SNAPSHOT_API = "/api/public/analytics/snapshot"; // Not a selectable period.
 
@@ -473,13 +477,14 @@ function selector(id, periods, selected, callback) {
     });
 }
 
-async function analyticsFor(period) {
-    if (!analyticsRequests.has(period)) {
-        const promise = fetchJson(`/api/public/analytics?period=${encodeURIComponent(period)}`)
-            .catch(error => { analyticsRequests.delete(period); throw error; });
-        analyticsRequests.set(period, promise);
+async function analyticsFor(period, account) {
+    const key = `${account}:${period}`;
+    if (!analyticsRequests.has(key)) {
+        const promise = fetchJson(`/api/public/analytics?account=${encodeURIComponent(account)}&period=${encodeURIComponent(period)}`)
+            .catch(error => { analyticsRequests.delete(key); throw error; });
+        analyticsRequests.set(key, promise);
     }
-    return analyticsRequests.get(period);
+    return analyticsRequests.get(key);
 }
 
 function createChart(id, type, data, options = {}) {
@@ -513,12 +518,14 @@ function applyPerformanceColor(element, value) {
 
 async function updatePerformance() {
     const period = performancePeriod;
+    const account = selectedAccount;
+    const generation = accountGeneration;
     const note = document.getElementById("performanceNote");
     document.getElementById("performancePeriodLabel").textContent = period === "ALL" ? "All" : period;
     note.textContent = "Loading market history…";
     try {
-        const info = await analyticsFor(period);
-        if (period !== performancePeriod) return;
+        const info = await analyticsFor(period, account);
+        if (period !== performancePeriod || generation !== accountGeneration) return;
         const spy = new Map((info.spy || []).map(p => [p.date, p.value]));
         const aligned = (info.performance || []).filter(p => spy.has(p.date));
         const fullPeriodElement = document.getElementById("spyFullPeriod");
@@ -558,7 +565,7 @@ async function updatePerformance() {
         createChart("performanceChart", "line", {
             labels: aligned.map(p => p.date),
             datasets: [
-                { label: "Portfolio (proxy)", data: aligned.map(p => p.value), borderColor: "#2dd4bf",
+                { label: "Portfolio", data: aligned.map(p => p.value), borderColor: "#2dd4bf",
                   backgroundColor: gradient, fill: true, borderWidth: 3, pointRadius: 0, pointHitRadius: 12, tension: .18 },
                 { label: "SPY · matched dates", data: aligned.map(p => spy.get(p.date)), borderColor: "#bb92ef",
                   backgroundColor: "#bb92ef", borderWidth: 2.5, pointRadius: 0, pointHitRadius: 12, tension: .18 },
@@ -570,9 +577,9 @@ async function updatePerformance() {
                         tooltip: { backgroundColor: "#2d2d2d", callbacks: {
                             title: items => String(items[0]?.label || "").slice(0,16),
                             label: c => `${c.dataset.label}: ${performancePct(c.parsed.y)}` } } } });
-        note.textContent = `Matched comparison: ${comparisonStart} to ${comparisonEnd}. ${info.performance_note} Longer SPY-period results above use their own start date and should not be compared directly with the shorter portfolio history.`;
+        note.textContent = `Matched comparison: ${comparisonStart} to ${comparisonEnd}. ${info.performance_note}`;
     } catch (error) {
-        if (period !== performancePeriod) return;
+        if (period !== performancePeriod || generation !== accountGeneration) return;
         note.textContent = `Performance unavailable: ${error.message}`;
     }
 }
@@ -600,11 +607,13 @@ function updateAllocation(info) {
 
 async function updateGainers() {
     const period = gainerPeriod;
+    const account = selectedAccount;
+    const generation = accountGeneration;
     const note = document.getElementById("gainerNote");
     note.textContent = "Loading stock returns…";
     try {
-        const info = await analyticsFor(period);
-        if (period !== gainerPeriod) return;
+        const info = await analyticsFor(period, account);
+        if (period !== gainerPeriod || generation !== accountGeneration) return;
         const sorted = [...info.gainers].sort((a, b) => b.return_pct - a.return_pct);
         if (!sorted.length) { note.textContent = "No price history available for the selected period."; return; }
         const shown = [...sorted.slice(0, 5), ...sorted.slice(-5).filter(x => !sorted.slice(0, 5).some(y => y.ticker === x.ticker))];
@@ -619,6 +628,7 @@ async function updateGainers() {
                         y: { ticks: { color: "#bbb" }, grid: { display: false } } } });
         note.textContent = `Top and bottom performers by share-price return (${period}). ${info.missing_tickers?.length ? "Missing prices: " + info.missing_tickers.join(", ") + "." : ""}`;
     } catch (error) {
+        if (generation !== accountGeneration) return;
         note.textContent = `Gainers/losers unavailable: ${error.message}`;
     }
 }
@@ -626,10 +636,11 @@ async function updateGainers() {
 let snapshotRequestId = 0;
 async function loadFixedAllocation() {
     const requestId = ++snapshotRequestId;
+    const account = selectedAccount;
     try {
-        // Always use the same snapshot source, regardless of either chart's period.
-        const info = await fetchJson(SNAPSHOT_API);
-        if (requestId === snapshotRequestId) updateAllocation(info);
+        // Dedicated current snapshot: never depend on chart period.
+        const info = await fetchJson(`${SNAPSHOT_API}?account=${encodeURIComponent(account)}`);
+        if (requestId === snapshotRequestId && account === selectedAccount) updateAllocation(info);
     } catch (error) {
         console.error("Could not load fixed allocation:", error);
         if (requestId === snapshotRequestId) {
@@ -662,6 +673,26 @@ elements.refreshButton.addEventListener("click", () => {
     updatePerformance();
     updateGainers();
 });
+
+function selectAccount(account) {
+    if (!['combined', 'us', 'dk'].includes(account) || selectedAccount === account) return;
+    selectedAccount = account;
+    accountGeneration++;
+    snapshotRequestId++;
+    analyticsRequests.clear();
+    for (const button of document.querySelectorAll('.account-option')) {
+        const active = button.dataset.account === selectedAccount;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', String(active));
+    }
+    // Both charts get new account data, but their own period buttons remain independent.
+    loadFixedAllocation();
+    updatePerformance();
+    updateGainers();
+}
+for (const button of document.querySelectorAll('.account-option')) {
+    button.addEventListener('click', () => selectAccount(button.dataset.account));
+}
 
 // Start charts after all analytics constants and functions are defined.
 initializeAnalytics();

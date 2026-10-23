@@ -702,41 +702,60 @@ def public_watchlist_get():
         }), 502
 
 
+def _account_documents():
+    us, _ = get_file("portfolio/merrill_portfolio.json", data=True)
+    dk, _ = get_file("portfolio/nordnet_portfolio.json", data=True)
+    return us, dk
+
+
+def _private_csv(path):
+    """Read an allowlisted CSV from the private repository, server-side only."""
+    if path not in (
+        "portfolio/performance/merrill_2026_ytd_provisional.csv",
+        "portfolio/performance/nordnet_all_available_provisional.csv",
+    ):
+        raise ValueError("Unapproved private file path")
+    response = requests.get(repo_url(path, data=True), headers=gh_headers(), timeout=20)
+    response.raise_for_status()
+    return base64.b64decode(response.json()["content"]).decode("utf-8")
+
+
 @app.get("/api/public/analytics")
 def public_analytics_get():
-    """Read-only public analytics. Response is an explicit safe-field allowlist."""
+    """Public analytics: never return private quantities, values, or transactions."""
+    account = request.args.get("account", "combined").lower()
     period = request.args.get("period", "1M").upper()
-    if period not in ("1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "3Y", "ALL"):
-        return jsonify({"error": "Unsupported period."}), 400
+    if account not in ("combined", "us", "dk") or period not in (
+        "1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "3Y", "ALL"
+    ):
+        return jsonify({"error": "Invalid account or period."}), 400
     try:
-        from public_analytics import get_public_analytics
-        portfolio, _ = get_file("portfolio/marks_portfolio.json", data=True)
-        if not isinstance(portfolio, dict):
-            return jsonify({"error": "Invalid portfolio data."}), 502
-        result = get_public_analytics(portfolio, period)
-        response = jsonify(result)
-        response.headers["Cache-Control"] = "public, max-age=60"
-        return response
-    except (requests.RequestException, RuntimeError, ValueError, TypeError, KeyError, ImportError):
-        app.logger.exception("Could not calculate public analytics")
-        return jsonify({"error": "Could not load market analytics."}), 502
-
-
-@app.get("/api/public/analytics/snapshot")
-def public_analytics_snapshot_get():
-    """Fixed current allocations and holdings, public safe fields only."""
-    try:
-        from public_analytics import get_public_snapshot
-        portfolio, _ = get_file("portfolio/marks_portfolio.json", data=True)
-        if not isinstance(portfolio, dict):
-            return jsonify({"error": "Invalid portfolio data."}), 502
-        response = jsonify(get_public_snapshot(portfolio))
+        from account_public import analytics
+        us, dk = _account_documents()
+        response = jsonify(analytics(us, dk, account, period, _private_csv))
         response.headers["Cache-Control"] = "public, max-age=60"
         return response
     except (requests.RequestException, RuntimeError, ValueError, TypeError,
             KeyError, ImportError):
-        app.logger.exception("Could not load public analytics snapshot")
-        return jsonify({"error": "Could not load portfolio snapshot."}), 502
+        app.logger.exception("Public account analytics unavailable")
+        return jsonify({"error": "Portfolio analytics temporarily unavailable."}), 502
+
+
+@app.get("/api/public/analytics/snapshot")
+def public_analytics_snapshot_get():
+    account = request.args.get("account", "combined").lower()
+    if account not in ("combined", "us", "dk"):
+        return jsonify({"error": "Invalid account."}), 400
+    try:
+        from account_public import snapshot
+        us, dk = _account_documents()
+        response = jsonify(snapshot(us, dk, account))
+        response.headers["Cache-Control"] = "public, max-age=60"
+        return response
+    except (requests.RequestException, RuntimeError, ValueError, TypeError,
+            KeyError, ImportError):
+        app.logger.exception("Public account snapshot unavailable")
+        return jsonify({"error": "Portfolio snapshot temporarily unavailable."}), 502
 
 
 @app.get("/api/public/workflows")

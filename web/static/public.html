@@ -267,6 +267,11 @@
         .analytics-head { display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
         .analytics-chart { height: 310px; position:relative; }
         .analytics-chart.short { height: 290px; }
+        .account-switcher { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:0 0 20px; }
+        .account-options { display:flex; gap:4px; padding:4px; border:1px solid #303030; background:#171717; border-radius:11px; flex-wrap:wrap; }
+        .account-option { font:inherit; font-size:.86rem; color:#a1a1aa; border:0; background:transparent; padding:9px 15px; cursor:pointer; border-radius:8px; }
+        .account-option.active { color:#fafafa; background:#363636; font-weight:600; }
+        .account-option:focus-visible { outline:2px solid white; outline-offset:2px; }
         .analytics-periods { display:flex; flex-wrap:wrap; gap:5px; }
         .analytics-period { cursor:pointer; border: 1px solid #333; background: #191919; color:#aaa; padding:7px 9px; border-radius:7px; font:inherit; font-size:.78rem; }
         .analytics-period.active { color:white; background:#353535; border-color:#777; }
@@ -338,6 +343,14 @@
              aria-live="polite"
              hidden></div>
 
+        <div class="account-switcher" aria-label="Portfolio account view">
+            <span class="public-muted">Account</span>
+            <div class="account-options" role="group" aria-label="Selected portfolio account">
+                <button type="button" class="account-option active" data-account="combined" aria-pressed="true">Combined</button>
+                <button type="button" class="account-option" data-account="us" aria-pressed="false">US · Merrill</button>
+                <button type="button" class="account-option" data-account="dk" aria-pressed="false">DK · Nordnet</button>
+            </div>
+        </div>
         <div class="public-tabs"
              role="tablist"
              aria-label="Portfolio sections">
@@ -391,7 +404,7 @@
                     <div class="analytics-chart performance-plot"><canvas id="performanceChart" role="img" aria-label="Portfolio and SPY performance line chart"></canvas></div>
                     <div class="performance-bottom">
                         <div class="performance-legend">
-                            <div class="performance-pill"><span class="performance-dot portfolio-dot"></span><span>Portfolio (proxy)</span><strong id="performancePortfolioPill">—</strong></div>
+                            <div class="performance-pill"><span class="performance-dot portfolio-dot"></span><span>Portfolio</span><strong id="performancePortfolioPill">—</strong></div>
                             <div class="performance-pill"><span class="performance-dot spy-dot"></span><span>SPY · matched dates</span><strong id="performanceSpyPill">—</strong></div>
                         </div>
                         <div id="spyFullPeriod" class="spy-full-period" hidden></div>
