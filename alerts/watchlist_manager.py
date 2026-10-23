@@ -275,8 +275,7 @@ def send_watchlist_to_discord():
         print("Watchlist is empty – nothing to send.")
         return
     if not DISCORD_WEBHOOK_URL:
-        print("Error: No Discord webhook URL configured.")
-        return
+        raise RuntimeError("No Discord webhook URL configured; watchlist was not posted.")
 
     rows = []
     for ticker in sorted(data):
@@ -303,6 +302,7 @@ def send_watchlist_to_discord():
         print("Watchlist with prices, valuations and revenue growth sent to Discord.")
     except Exception as exc:
         print(f"Failed to send watchlist: {exc}")
+        raise RuntimeError("Discord watchlist delivery failed; the GitHub Actions run should be marked failed.") from exc
 
 
 def main():
