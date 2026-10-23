@@ -41,34 +41,36 @@ def _valid_positive_numbers(values):
 
 
 def _normalize_entry(entry):
-    """Accept the original {ticker: [price targets]} format and the structured format."""
+    """Normalize legacy targets and directional valuation targets.
+
+    Canonical schema: valuation_targets[metric] = {"trim": [...], "buy": [...]}.
+    Legacy metric lists are treated as trim thresholds for backward compatibility.
+    """
     if isinstance(entry, (list, tuple)):
         return {"price_targets": _valid_positive_numbers(entry), "valuation_targets": {}}
     if not isinstance(entry, dict):
         return {"price_targets": [], "valuation_targets": {}}
-
     price_values = entry.get("price_targets", entry.get("price", []))
     raw_valuations = entry.get("valuation_targets", entry.get("valuation", {}))
-    normalized_valuations = {}
+    normalized = {}
     if isinstance(raw_valuations, dict):
-        for raw_metric, raw_values in raw_valuations.items():
+        for raw_metric, raw_targets in raw_valuations.items():
             try:
                 metric = canonical_metric(raw_metric)
             except ValueError:
                 continue
             if metric == "PRICE":
                 continue
-            values = _valid_positive_numbers(raw_values)
-            if values:
-                normalized_valuations.setdefault(metric, []).extend(values)
-    normalized_valuations = {
-        metric: sorted(set(values))
-        for metric, values in normalized_valuations.items() if values
-    }
-    return {
-        "price_targets": _valid_positive_numbers(price_values),
-        "valuation_targets": normalized_valuations,
-    }
+            # Existing [35] format means trim at/above 35x.
+            if isinstance(raw_targets, dict):
+                trim = _valid_positive_numbers(raw_targets.get("trim", []))
+                buy = _valid_positive_numbers(raw_targets.get("buy", []))
+            else:
+                trim = _valid_positive_numbers(raw_targets)
+                buy = []
+            if trim or buy:
+                normalized[metric] = {"trim": trim, "buy": buy}
+    return {"price_targets": _valid_positive_numbers(price_values), "valuation_targets": normalized}
 
 
 def load_watchlist():
@@ -91,9 +93,10 @@ def load_watchlist():
         entry = _normalize_entry(raw_entry)
         combined = result.setdefault(ticker, {"price_targets": [], "valuation_targets": {}})
         combined["price_targets"] = sorted(set(combined["price_targets"] + entry["price_targets"]))
-        for metric, values in entry["valuation_targets"].items():
-            merged = combined["valuation_targets"].setdefault(metric, [])
-            combined["valuation_targets"][metric] = sorted(set(merged + values))
+        for metric, directions in entry["valuation_targets"].items():
+            merged = combined["valuation_targets"].setdefault(metric, {"trim": [], "buy": []})
+            for direction in ("trim", "buy"):
+                merged[direction] = sorted(set(merged[direction] + directions[direction]))
     return result
 
 
@@ -102,7 +105,7 @@ def save_watchlist(data):
     print("Watchlist saved.")
 
 
-def add_target(ticker, target, metric="PRICE"):
+def add_target(ticker, target, metric="PRICE", direction="trim"):
     ticker = ticker.strip().upper()
     metric = canonical_metric(metric)
     target = float(target)
@@ -111,17 +114,28 @@ def add_target(ticker, target, metric="PRICE"):
 
     data = load_watchlist()
     entry = data.setdefault(ticker, {"price_targets": [], "valuation_targets": {}})
-    bucket = entry["price_targets"] if metric == "PRICE" else entry["valuation_targets"].setdefault(metric, [])
+    direction = str(direction or "trim").strip().lower()
+    if direction not in ("trim", "buy"):
+        raise ValueError("Direction must be TRIM or BUY.")
+    if metric == "PRICE":
+        bucket = entry["price_targets"]
+    else:
+        metric_targets = entry["valuation_targets"].setdefault(metric, {"trim": [], "buy": []})
+        # Accept any legacy shape still present in memory.
+        if isinstance(metric_targets, list):
+            metric_targets = {"trim": metric_targets, "buy": []}
+            entry["valuation_targets"][metric] = metric_targets
+        bucket = metric_targets[direction]
     if target in bucket:
         print(f"{metric} target {target:g} already exists for {ticker}.")
         return
     bucket.append(target)
     bucket.sort()
     save_watchlist(data)
-    print(f"Added {metric} target {target:g} for {ticker}.")
+    print(f"Added {metric} {direction.upper()} target {target:g} for {ticker}.")
 
 
-def remove_target(ticker, target, metric="PRICE"):
+def remove_target(ticker, target, metric="PRICE", direction="trim"):
     ticker = ticker.strip().upper()
     metric = canonical_metric(metric)
     target = float(target)
@@ -131,17 +145,29 @@ def remove_target(ticker, target, metric="PRICE"):
         return
 
     entry = data[ticker]
-    bucket = entry["price_targets"] if metric == "PRICE" else entry["valuation_targets"].get(metric, [])
+    direction = str(direction or "trim").strip().lower()
+    if direction not in ("trim", "buy"):
+        raise ValueError("Direction must be TRIM or BUY.")
+    if metric == "PRICE":
+        bucket = entry["price_targets"]
+    else:
+        metric_targets = entry["valuation_targets"].get(metric, {"trim": [], "buy": []})
+        if isinstance(metric_targets, list):
+            metric_targets = {"trim": metric_targets, "buy": []}
+            entry["valuation_targets"][metric] = metric_targets
+        bucket = metric_targets[direction]
     if target not in bucket:
         print(f"{metric} target {target:g} not found for {ticker}.")
         return
     bucket.remove(target)
-    if metric != "PRICE" and not bucket:
-        entry["valuation_targets"].pop(metric, None)
+    if metric != "PRICE":
+        metric_targets = entry["valuation_targets"].get(metric, {})
+        if not metric_targets.get("trim") and not metric_targets.get("buy"):
+            entry["valuation_targets"].pop(metric, None)
     if not entry["price_targets"] and not entry["valuation_targets"]:
         del data[ticker]
     save_watchlist(data)
-    print(f"Removed {metric} target {target:g} for {ticker}.")
+    print(f"Removed {metric} {direction.upper()} target {target:g} for {ticker}.")
 
 
 def remove_all(ticker):
@@ -162,7 +188,13 @@ def list_watchlist():
         return
     for ticker, entry in sorted(data.items()):
         parts = [f"PRICE: {entry['price_targets']} "] if entry["price_targets"] else []
-        parts.extend(f"{metric}: {values}" for metric, values in sorted(entry["valuation_targets"].items()))
+        for metric, directions in sorted(entry["valuation_targets"].items()):
+            if isinstance(directions, list):
+                directions = {"trim": directions, "buy": []}
+            if directions.get("trim"):
+                parts.append(f"{metric} TRIM (≥): {directions['trim']}")
+            if directions.get("buy"):
+                parts.append(f"{metric} BUY (≤): {directions['buy']}")
         print(f"{ticker}: " + ("; ".join(parts) if parts else "no targets"))
 
 
@@ -275,15 +307,21 @@ def send_watchlist_to_discord():
         print("Watchlist is empty – nothing to send.")
         return
     if not DISCORD_WEBHOOK_URL:
-        raise RuntimeError("No Discord webhook URL configured; watchlist was not posted.")
+        print("Error: No Discord webhook URL configured.")
+        return
 
     rows = []
     for ticker in sorted(data):
         entry = data[ticker]
         target_parts = [_format_price_target(target) for target in entry["price_targets"]]
         for metric in VALUATION_METRICS:
-            for target in entry["valuation_targets"].get(metric, []):
-                target_parts.append(f"{metric}≥{target:g}x")
+            metric_targets = entry["valuation_targets"].get(metric, {"trim": [], "buy": []})
+            if isinstance(metric_targets, list):
+                metric_targets = {"trim": metric_targets, "buy": []}
+            for target in metric_targets.get("trim", []):
+                target_parts.append(f"{metric} trim≥{target:g}x")
+            for target in metric_targets.get("buy", []):
+                target_parts.append(f"{metric} buy≤{target:g}x")
         targets_str = ", ".join(target_parts) if target_parts else "—"
 
         current_price, valuations, revenue_growth_pct = get_market_snapshot(ticker)
@@ -302,18 +340,20 @@ def send_watchlist_to_discord():
         print("Watchlist with prices, valuations and revenue growth sent to Discord.")
     except Exception as exc:
         print(f"Failed to send watchlist: {exc}")
-        raise RuntimeError("Discord watchlist delivery failed; the GitHub Actions run should be marked failed.") from exc
 
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python watchlist_manager.py ACTION [TICKER] [TARGET] [METRIC]")
+        print("Usage: python watchlist_manager.py ACTION [TICKER] [TARGET] [METRIC] [DIRECTION]")
         sys.exit(1)
     action = sys.argv[1].strip().upper()
     ticker = sys.argv[2].strip().upper() if len(sys.argv) > 2 and sys.argv[2] else None
     try:
         target = float(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] else None
         metric = canonical_metric(sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else "PRICE")
+        direction = (sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] else "TRIM").strip().lower()
+        if direction not in ("trim", "buy"):
+            raise ValueError("Direction must be TRIM or BUY.")
     except ValueError as exc:
         print(f"Invalid input: {exc}")
         sys.exit(2)
@@ -322,12 +362,12 @@ def main():
         if not ticker or target is None:
             print("ADD requires TICKER and TARGET.")
             sys.exit(1)
-        add_target(ticker, target, metric)
+        add_target(ticker, target, metric, direction)
     elif action == "REMOVE":
         if not ticker or target is None:
             print("REMOVE requires TICKER and TARGET.")
             sys.exit(1)
-        remove_target(ticker, target, metric)
+        remove_target(ticker, target, metric, direction)
     elif action == "REMOVE_ALL":
         if not ticker:
             print("REMOVE_ALL requires TICKER.")

@@ -22,6 +22,14 @@ on:
         description: 'Target price or valuation multiple (e.g., 35 for 35x)'
         required: false
         default: ''
+      direction:
+        description: 'Valuation direction: TRIM (multiple at/above target) or BUY (multiple at/below target)'
+        required: true
+        default: 'TRIM'
+        type: choice
+        options:
+          - TRIM
+          - BUY
       metric:
         description: 'Metric for ADD/REMOVE'
         required: true
@@ -56,8 +64,9 @@ jobs:
           TICKER: ${{ github.event.inputs.ticker }}
           TARGET: ${{ github.event.inputs.target }}
           METRIC: ${{ github.event.inputs.metric }}
+          DIRECTION: ${{ github.event.inputs.direction }}
           DISCORD_STOCK_WEBHOOK: ${{ secrets.DISCORD_STOCK_WEBHOOK }}
-        run: python alerts/watchlist_manager.py "$ACTION" "$TICKER" "$TARGET" "$METRIC"
+        run: python alerts/watchlist_manager.py "$ACTION" "$TICKER" "$TARGET" "$METRIC" "$DIRECTION"
 
       - name: Commit & push changes
         if: github.event.inputs.action != 'LIST' && github.event.inputs.action != 'STATUS'
