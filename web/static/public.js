@@ -505,36 +505,79 @@ function createChart(id, type, data, options = {}) {
     });
 }
 
+function performancePct(value) {
+    if (value === null || !Number.isFinite(Number(value))) return "—";
+    const n = Number(value);
+    return `${n > 0 ? "+" : ""}${n.toFixed(2)}%`;
+}
+
+function applyPerformanceColor(element, value) {
+    element.classList.toggle("positive", Number(value) > 0);
+    element.classList.toggle("negative", Number(value) < 0);
+}
+
 async function updatePerformance() {
     const period = performancePeriod;
     const note = document.getElementById("performanceNote");
+    document.getElementById("performancePeriodLabel").textContent = period === "ALL" ? "All" : period;
     note.textContent = "Loading market history…";
     try {
         const info = await analyticsFor(period);
         if (period !== performancePeriod) return;
-        const spy = new Map(info.spy.map(p => [p.date, p.value]));
-        const aligned = info.performance.filter(p => spy.has(p.date));
+        const spy = new Map((info.spy || []).map(p => [p.date, p.value]));
+        const aligned = (info.performance || []).filter(p => spy.has(p.date));
+        const fullPeriodElement = document.getElementById("spyFullPeriod");
+        const selectedSpy = info.spy_selected_period;
+        fullPeriodElement.hidden = true;
+        if (selectedSpy && Number.isFinite(Number(selectedSpy.return_pct))) {
+            fullPeriodElement.textContent = `SPY full ${period === "ALL" ? "available" : period} period: ${performancePct(selectedSpy.return_pct)} (${selectedSpy.from} to ${selectedSpy.to})`;
+            fullPeriodElement.hidden = false;
+        }
         if (aligned.length < 2) {
             if (analyticsCharts.performanceChart) analyticsCharts.performanceChart.destroy();
             delete analyticsCharts.performanceChart;
+            for (const id of ["performanceReturn", "performanceDifference", "performancePortfolioPill", "performanceSpyPill"]) {
+                document.getElementById(id).textContent = "—";
+            }
+            document.getElementById("performanceBaseline").textContent = "Insufficient portfolio history";
             note.textContent = "Not enough verified portfolio history for this period. " + info.performance_note;
             return;
         }
+        const pLast = Number(aligned[aligned.length - 1].value);
+        const sLast = Number(spy.get(aligned[aligned.length - 1].date));
+        const comparisonStart = String(aligned[0].date).slice(0,10);
+        const comparisonEnd = String(aligned[aligned.length - 1].date).slice(0,10);
+        const primary = document.getElementById("performanceReturn");
+        primary.textContent = performancePct(pLast);
+        applyPerformanceColor(primary, pLast);
+        document.getElementById("performanceBaseline").textContent = `Both lines rebased to 0% on ${comparisonStart}`;
+        document.getElementById("performanceDifference").textContent = `${pLast - sLast >= 0 ? "+" : ""}${(pLast - sLast).toFixed(2)} pp`;
+        document.getElementById("performancePortfolioPill").textContent = performancePct(pLast);
+        document.getElementById("performanceSpyPill").textContent = performancePct(sLast);
+        applyPerformanceColor(document.getElementById("performancePortfolioPill"), pLast);
+        applyPerformanceColor(document.getElementById("performanceSpyPill"), sLast);
+        const chartCtx = document.getElementById("performanceChart").getContext("2d");
+        const gradient = chartCtx.createLinearGradient(0,0,0,340);
+        gradient.addColorStop(0, "rgba(45,212,191,.20)");
+        gradient.addColorStop(1, "rgba(45,212,191,0)");
         createChart("performanceChart", "line", {
             labels: aligned.map(p => p.date),
             datasets: [
-                { label: "Portfolio (proxy)", data: aligned.map(p => p.value), borderColor: "#60a5fa",
-                  backgroundColor: "#60a5fa", borderWidth: 2.3, pointRadius: 0, tension: .15 },
-                { label: "SPY", data: aligned.map(p => spy.get(p.date)), borderColor: "#bbb",
-                  backgroundColor: "#bbb", borderWidth: 2, pointRadius: 0, tension: .15 },
+                { label: "Portfolio (proxy)", data: aligned.map(p => p.value), borderColor: "#2dd4bf",
+                  backgroundColor: gradient, fill: true, borderWidth: 3, pointRadius: 0, pointHitRadius: 12, tension: .18 },
+                { label: "SPY · matched dates", data: aligned.map(p => spy.get(p.date)), borderColor: "#bb92ef",
+                  backgroundColor: "#bb92ef", borderWidth: 2.5, pointRadius: 0, pointHitRadius: 12, tension: .18 },
             ],
         }, { interaction: { intersect: false, mode: "index" },
-             scales: { x: { ticks: { maxTicksLimit: 7, color: "#888" }, grid: { display: false } },
-                       y: { ticks: { color: "#888", callback: v => `${v}%` }, grid: { color: "#282828" } } },
-             plugins: { legend: { labels: { color: "#bbb" } },
-                        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y.toFixed(2)}%` } } } });
-        note.textContent = `${info.performance_note} Available from: ${String(info.available_from || "—").slice(0, 10)}.`;
+             scales: { x: { ticks: { maxTicksLimit: 6, color: "#aaa", maxRotation: 0 }, grid: { display: false }, border: { display: false } },
+                       y: { position: "right", ticks: { color: "#aaa", callback: v => `${v}%` }, grid: { color: "rgba(255,255,255,.10)" }, border: { display: false } } },
+             plugins: { legend: { display: false },
+                        tooltip: { backgroundColor: "#2d2d2d", callbacks: {
+                            title: items => String(items[0]?.label || "").slice(0,16),
+                            label: c => `${c.dataset.label}: ${performancePct(c.parsed.y)}` } } } });
+        note.textContent = `Matched comparison: ${comparisonStart} to ${comparisonEnd}. ${info.performance_note} Longer SPY-period results above use their own start date and should not be compared directly with the shorter portfolio history.`;
     } catch (error) {
+        if (period !== performancePeriod) return;
         note.textContent = `Performance unavailable: ${error.message}`;
     }
 }

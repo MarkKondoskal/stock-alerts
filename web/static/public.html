@@ -271,6 +271,28 @@
         .analytics-period { cursor:pointer; border: 1px solid #333; background: #191919; color:#aaa; padding:7px 9px; border-radius:7px; font:inherit; font-size:.78rem; }
         .analytics-period.active { color:white; background:#353535; border-color:#777; }
         .analytics-note { margin:10px 0 0; font-size:.8rem; color:#999; line-height:1.45; }
+        .analytics-card.performance-card { background: #171717; border-color: #333; padding: clamp(18px, 3vw, 30px); }
+        .performance-summary { display:flex; align-items:end; justify-content:space-between; gap:20px; flex-wrap:wrap; padding:10px 0 18px; }
+        .performance-label { color:#a8a8a8; font-size:.92rem; margin-bottom:5px; }
+        .performance-label span { margin-left:5px; color:#bfbfbf; }
+        .performance-big { font-size:clamp(2.6rem, 6vw, 4.3rem); color:#f4f4f5; font-weight:750; letter-spacing:-.055em; line-height:1.06; font-variant-numeric:tabular-nums; }
+        .performance-big.positive, .performance-pill strong.positive { color:#2dd4bf; }
+        .performance-big.negative, .performance-pill strong.negative { color:#fb7185; }
+        .performance-baseline { color:#a4a4a4; margin-top:9px; font-size:.8rem; }
+        .performance-context { display:flex; flex-direction:column; align-items:flex-end; gap:5px; padding-bottom:5px; }
+        .performance-context-title, #performanceDifferenceLabel { color:#aaa; font-size:.75rem; }
+        .performance-context strong { color:#f5f5f5; font-size:1.35rem; font-variant-numeric:tabular-nums; }
+        .analytics-chart.performance-plot { height:330px; }
+        .performance-bottom { display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; padding:13px 0 6px; }
+        .performance-legend { display:flex; flex-wrap:wrap; gap:10px; }
+        .performance-pill { display:flex; align-items:center; gap:9px; border:1px solid #383838; border-radius:22px; background:#252525; color:#dedede; padding:9px 12px; font-size:.81rem; }
+        .performance-pill strong { font-size:1rem; color:#f1f1f1; font-variant-numeric:tabular-nums; }
+        .performance-dot { width:10px; height:10px; border-radius:100%; display:inline-block; }
+        .portfolio-dot { background:#2dd4bf; } .spy-dot { background:#bb92ef; }
+        .spy-full-period { color:#ddd; font-size:.82rem; background:#242424; border:1px solid #363636; padding:10px 13px; border-radius:10px; }
+        .spy-full-period[hidden] { display:none; }
+        @media(max-width:600px) { .performance-context { align-items:flex-start; } .analytics-chart.performance-plot { height:275px; } }
+
         .return-positive { color:#4ade80; } .return-negative { color:#fb7185; }
         @media (max-width: 800px) { .analytics-grid { grid-template-columns: 1fr; } }
         @media (max-width: 600px) {
@@ -367,11 +389,30 @@
             </div>
 
             <div class="analytics-grid">
-                <div class="analytics-card full">
+                <div class="analytics-card full performance-card">
                     <div class="analytics-head"><h2 class="analytics-title">Portfolio vs. S&amp;P 500 (SPY)</h2>
                         <div class="analytics-periods" id="performancePeriods" aria-label="Performance time period"></div>
                     </div>
-                    <div class="analytics-chart"><canvas id="performanceChart" role="img" aria-label="Portfolio and SPY performance line chart"></canvas></div>
+                    <div class="performance-summary">
+                        <div class="performance-primary">
+                            <div class="performance-label">Portfolio return <span id="performancePeriodLabel">1M</span></div>
+                            <div id="performanceReturn" class="performance-big">—</div>
+                            <div id="performanceBaseline" class="performance-baseline">Loading comparable history…</div>
+                        </div>
+                        <div class="performance-context">
+                            <span class="performance-context-title">Compared with SPY</span>
+                            <strong id="performanceDifference">—</strong>
+                            <span id="performanceDifferenceLabel">Percentage-point difference</span>
+                        </div>
+                    </div>
+                    <div class="analytics-chart performance-plot"><canvas id="performanceChart" role="img" aria-label="Portfolio and SPY performance line chart"></canvas></div>
+                    <div class="performance-bottom">
+                        <div class="performance-legend">
+                            <div class="performance-pill"><span class="performance-dot portfolio-dot"></span><span>Portfolio (proxy)</span><strong id="performancePortfolioPill">—</strong></div>
+                            <div class="performance-pill"><span class="performance-dot spy-dot"></span><span>SPY · matched dates</span><strong id="performanceSpyPill">—</strong></div>
+                        </div>
+                        <div id="spyFullPeriod" class="spy-full-period" hidden></div>
+                    </div>
                     <p id="performanceNote" class="analytics-note">Loading historical prices…</p>
                 </div>
                 <div class="analytics-card">

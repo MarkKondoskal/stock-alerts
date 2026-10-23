@@ -1,6 +1,6 @@
 """Read-only, percentage-only portfolio analytics. No portfolio quantities leave this module.
 
-Market-value allocations use latest available adjusted close. Performance is a
+Market-value allocations use latest available split-adjusted closing prices. Performance is a
 holdings-weighted PRICE-RETURN PROXY, not a brokerage/account TWR: cash,
 dividends, FX, fees and fully closed historical holdings are unavailable.
 """
@@ -39,15 +39,15 @@ def _load_history(tickers, start, intraday):
     import pandas as pd
     tickers = sorted(set(tickers) | {"SPY"})
     if intraday == "1D":
-        raw = yf.download(tickers, period="1d", interval="5m", auto_adjust=True,
+        raw = yf.download(tickers, period="1d", interval="5m", auto_adjust=False,
                           progress=False, threads=True, group_by="ticker")
     elif intraday == "1W":
-        raw = yf.download(tickers, period="5d", interval="60m", auto_adjust=True,
+        raw = yf.download(tickers, period="5d", interval="60m", auto_adjust=False,
                           progress=False, threads=True, group_by="ticker")
     else:
         raw = yf.download(tickers, start=start.isoformat(),
                           end=(date.today() + timedelta(days=1)).isoformat(),
-                          interval="1d", auto_adjust=True, progress=False,
+                          interval="1d", auto_adjust=False, progress=False,
                           threads=True, group_by="ticker")
     if raw is None or raw.empty:
         return {}
@@ -184,7 +184,7 @@ def get_public_snapshot(portfolio):
     import yfinance as yf
     import pandas as pd
     tickers = sorted(positions)
-    raw = yf.download(tickers, period="5d", interval="1d", auto_adjust=True,
+    raw = yf.download(tickers, period="5d", interval="1d", auto_adjust=False,
                       progress=False, threads=True, group_by="ticker")
     prices = {}
     if raw is not None and not raw.empty:
@@ -269,6 +269,49 @@ def _intraday_series(history, positions):
     return a, b
 
 
+def _spy_selected_period_return(period, start_day):
+    """Standalone SPY total-return proxy for the requested calendar window.
+
+    Daily closing prices are used (price return, excluding dividends). YTD anchors to the last available close
+    BEFORE January 1 rather than starting at the first January close.
+    This is separate from the SPY line aligned to the holdings proxy.
+    """
+    if period in ("1D", "1W"):
+        return None
+    try:
+        import yfinance as yf
+        import pandas as pd
+        query_start = start_day - timedelta(days=12)
+        raw = yf.download("SPY", start=query_start.isoformat(),
+                          end=(date.today() + timedelta(days=1)).isoformat(),
+                          interval="1d", auto_adjust=False, progress=False,
+                          threads=False)
+        if raw is None or raw.empty:
+            return None
+        series = raw["Close"]
+        if isinstance(series, pd.DataFrame):
+            series = series.iloc[:, 0]
+        valid = [(d.date(), _number(value)) for d, value in series.dropna().items()]
+        valid = [(d, value) for d, value in valid if value > 0]
+        if len(valid) < 2:
+            return None
+        before = [(d, value) for d, value in valid if d < start_day]
+        after = [(d, value) for d, value in valid if d >= start_day]
+        if period == "YTD" and before:
+            initial_day, initial_price = before[-1]
+        elif after:
+            initial_day, initial_price = after[0]
+        else:
+            return None
+        final_day, final_price = valid[-1]
+        if final_day <= initial_day:
+            return None
+        return {"return_pct": round((final_price / initial_price - 1) * 100, 2),
+                "from": initial_day.isoformat(), "to": final_day.isoformat()}
+    except (ValueError, TypeError, KeyError, ImportError):
+        return None
+
+
 def get_public_analytics(portfolio, period):
     if period not in PERIODS:
         raise ValueError("Invalid period")
@@ -324,7 +367,16 @@ def get_public_analytics(portfolio, period):
     gainers = sorted([{"ticker": h["ticker"], "return_pct": h["period_return_pct"]}
                       for h in holdings if h["period_return_pct"] is not None],
                      key=lambda x: -x["return_pct"])
+    # Include an independently anchored SPY return for the entire selected
+    # window. A YTD label must NOT silently mean 'since the portfolio import'.
+    requested_start = (date(date.today().year, 1, 1) if period == "YTD" else
+                       date.today() - timedelta(days=PERIODS[period]))
+    # ALL is naturally constrained by actual portfolio history.
+    if period == "ALL" and trades:
+        requested_start = min(trades)
+    spy_full_period = _spy_selected_period_return(period, requested_start)
     result = {"period": period, "holdings": holdings, "sectors": sectors,
+              "spy_selected_period": spy_full_period,
               "performance": performance, "spy": spy, "gainers": gainers,
               "basis": "latest market prices", "performance_note": note,
               "available_from": performance[0]["date"] if performance else None,
