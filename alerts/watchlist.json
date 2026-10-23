@@ -204,6 +204,7 @@
   },
   "ASTS": {
     "price_targets": [
+      32.5,
       36.0
     ],
     "valuation_targets": {}
