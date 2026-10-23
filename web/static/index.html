@@ -1,5 +1,21 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>StockAlerts Core</title><link rel="stylesheet" href="/static/styles.css"></head>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StockAlerts Core</title>
+
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="manifest" href="/static/pwa/manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/pwa/icon-192.png">
+  <link rel="apple-touch-icon" href="/static/pwa/icon-192.png">
+
+  <meta name="theme-color" content="#0b0d10">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="StockAlerts">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+
 <script>
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
@@ -16,8 +32,4 @@
 <section id="workflows" class="view hidden"><div class="heading"><div><h1>GitHub Workflows</h1><p>Statuses and run history fetched directly from GitHub Actions.</p></div><button id="reload-workflows" class="ghost">Refresh runs</button></div><div class="panel"><div class="dispatch"><label>Run workflow<select id="workflow-select"><option value="stock_checker.yml">Stock & Sentiment Alert Pipeline</option><option value="watchlist_manager.yml">Watchlist Manager</option><option value="earnings_report.yml">Earnings Report</option><option value="economic_alert.yml">Economic Alert</option><option value="heartbeat.yml">Heartbeat</option><option value="portfolio_summary.yml">Portfolio Summary</option></select></label><button id="dispatch" class="primary">▶ Trigger workflow</button></div><div id="workflow-list" class="workflow-list"></div></div></section>
 <section id="settings" class="view hidden"><div class="heading"><div><h1>Settings & connection</h1><p>Connection details and safe operation.</p></div></div><div class="panel settings"><h2>Connected services</h2><div class="setting-row"><div><b>GitHub repository</b><p>Configured server-side with GITHUB_REPOSITORY</p></div><span class="pill">Server-side</span></div><div class="setting-row"><div><b>GitHub Actions</b><p>Read workflow runs and dispatch approved workflows.</p></div><span class="pill">GitHub API</span></div><div class="setting-row"><div><b>Discord</b><p>Test uses the server-side DISCORD_STOCK_WEBHOOK secret.</p></div><span class="pill">Secret protected</span></div><button id="logout" class="ghost">Disconnect this browser</button></div></section>
 <div id="toast" class="toast hidden"></div></main><script src="/static/app.js"></script></body></html>
-<link rel="manifest" href="/static/pwa/manifest.json">
-<meta name="theme-color" content="#0b0d10">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="StockAlerts">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
