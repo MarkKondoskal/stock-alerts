@@ -631,3 +631,5 @@ elements.refreshButton.addEventListener("click", () => {
     updatePerformance();
     updateGainers();
 });
+
+initializeAnalytics();
