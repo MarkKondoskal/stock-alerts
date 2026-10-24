@@ -7,6 +7,7 @@
     <meta name="theme-color" content="#0b0b0b">
     <title>Public Portfolio Dashboard</title>
     <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="/static/sentiment.css?v=sentiment-20261024-1">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js" defer></script>
 
     <style>
@@ -394,6 +395,11 @@
                 tabindex="-1">
                 Watchlist
             </button>
+
+            <button id="sentimentTab" class="public-tab" type="button" role="tab"
+                aria-selected="false" aria-controls="sentimentPanel" tabindex="-1">
+                Sentiment
+            </button>
         </div>
 
         <!-- TAB 1: HOLDINGS -->
@@ -526,11 +532,18 @@
             </p>
         </section>
 
+        <!-- TAB 3: SENTIMENT (public market data only; never portfolio details) -->
+        <section id="sentimentPanel" class="public-panel" role="tabpanel"
+            aria-labelledby="sentimentTab" hidden>
+            <div id="sentiment-public" class="sentiment-root"></div>
+        </section>
+
         <footer class="public-footer">
             Public, read-only dashboard
         </footer>
     </main>
 
-    <script src="/static/public.js?v=trade-integration-20261024-2" defer></script>
+    <script src="/static/public.js?v=sentiment-20261024-1" defer></script>
+    <script src="/static/sentiment_ui.js?v=sentiment-20261024-1" defer></script>
 </body>
 </html>

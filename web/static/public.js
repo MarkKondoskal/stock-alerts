@@ -9,8 +9,10 @@ const API = {
 const elements = {
     holdingsTab: document.getElementById("holdingsTab"),
     watchlistTab: document.getElementById("watchlistTab"),
+    sentimentTab: document.getElementById("sentimentTab"),
     holdingsPanel: document.getElementById("holdingsPanel"),
     watchlistPanel: document.getElementById("watchlistPanel"),
+    sentimentPanel: document.getElementById("sentimentPanel"),
 
     holdingsBody: document.getElementById("holdingsBody"),
     watchlistBody: document.getElementById("watchlistBody"),
@@ -119,65 +121,43 @@ async function fetchJson(url) {
 ------------------------- */
 
 function activateTab(tabName, moveFocus = false) {
-    const showHoldings = tabName === "holdings";
-
-    elements.holdingsTab.setAttribute(
-        "aria-selected",
-        String(showHoldings)
-    );
-    elements.watchlistTab.setAttribute(
-        "aria-selected",
-        String(!showHoldings)
-    );
-
-    elements.holdingsTab.tabIndex = showHoldings ? 0 : -1;
-    elements.watchlistTab.tabIndex = showHoldings ? -1 : 0;
-
-    elements.holdingsPanel.hidden = !showHoldings;
-    elements.watchlistPanel.hidden = showHoldings;
-
-    if (moveFocus) {
-        (showHoldings
-            ? elements.holdingsTab
-            : elements.watchlistTab
-        ).focus();
+    const tabs = [
+        ["holdings", elements.holdingsTab, elements.holdingsPanel],
+        ["watchlist", elements.watchlistTab, elements.watchlistPanel],
+        ["sentiment", elements.sentimentTab, elements.sentimentPanel],
+    ];
+    for (const [name, button, panel] of tabs) {
+        const active = name === tabName;
+        button.setAttribute("aria-selected", String(active));
+        button.tabIndex = active ? 0 : -1;
+        panel.hidden = !active;
+        if (active && moveFocus) button.focus();
     }
+    // Portfolio account/currency filters don't apply to broad market sentiment.
+    const controls = document.querySelector('.account-switcher');
+    if (controls) controls.hidden = tabName === 'sentiment';
+    for (const id of ['accountStatus', 'publicDataFreshness']) {
+        const item = document.getElementById(id);
+        if (item) item.hidden = tabName === 'sentiment';
+    }
+    if (tabName === 'sentiment') window.StockSentiment?.load('public');
 }
 
-elements.holdingsTab.addEventListener("click", () => {
-    activateTab("holdings");
-});
-
-elements.watchlistTab.addEventListener("click", () => {
-    activateTab("watchlist");
-});
-
-for (const [tab, name] of [
-    [elements.holdingsTab, "holdings"],
-    [elements.watchlistTab, "watchlist"],
-]) {
-    tab.addEventListener("keydown", (event) => {
-        if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
-            event.preventDefault();
-
-            const nextTab = name === "holdings"
-                ? "watchlist"
-                : "holdings";
-
-            activateTab(nextTab, true);
-        }
-
-        if (event.key === "Home") {
-            event.preventDefault();
-            activateTab("holdings", true);
-        }
-
-        if (event.key === "End") {
-            event.preventDefault();
-            activateTab("watchlist", true);
-        }
+const publicTabNames = ['holdings', 'watchlist', 'sentiment'];
+const publicTabButtons = [elements.holdingsTab, elements.watchlistTab, elements.sentimentTab];
+publicTabButtons.forEach((button, index) => {
+    button.addEventListener('click', () => activateTab(publicTabNames[index]));
+    button.addEventListener('keydown', event => {
+        let next = index;
+        if (event.key === 'ArrowRight') next = (index + 1) % publicTabNames.length;
+        else if (event.key === 'ArrowLeft') next = (index + publicTabNames.length - 1) % publicTabNames.length;
+        else if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = publicTabNames.length - 1;
+        else return;
+        event.preventDefault();
+        activateTab(publicTabNames[next], true);
     });
-}
+});
 
 
 /* -------------------------

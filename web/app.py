@@ -971,6 +971,20 @@ def private_trade_add():
         app.logger.exception('Private trade save failed')
         return jsonify({'error':'Could not confirm the trade save. Check recent trades before retrying.'}),502
 
+
+
+@app.get("/api/public/sentiment")
+def public_sentiment_get():
+    """Read-only public market sentiment. No portfolio files, tokens or account values."""
+    try:
+        from sentiment_data import get_sentiment_dashboard
+        response = jsonify(get_sentiment_dashboard())
+        response.headers["Cache-Control"] = "public, max-age=120"
+        return response
+    except Exception:
+        app.logger.exception("Market sentiment temporarily unavailable")
+        return jsonify({"error": "Market sentiment sources temporarily unavailable."}), 502
+
 if __name__ == "__main__":
     # Local development only. Use Gunicorn for deployment.
     app.run(

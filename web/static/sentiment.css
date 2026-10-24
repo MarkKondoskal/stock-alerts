@@ -1,0 +1,43 @@
+/* Shared public/private Market Sentiment tab. */
+.sentiment-root{max-width:1200px;margin:0 auto;color:#f4f4f5}
+.sentiment-head{display:flex;align-items:flex-start;justify-content:space-between;gap:15px;flex-wrap:wrap;margin-bottom:12px}
+.sentiment-head h1{font-size:clamp(23px,2.8vw,30px);margin:0 0 5px;letter-spacing:-.7px}
+.sentiment-head p{color:#a1a1aa;font-size:13px;line-height:1.6;margin:0}
+.sentiment-accent{color:#2dd4bf}
+.sentiment-refresh{background:#232327;border:1px solid #3a3a42;border-radius:8px;color:#f4f4f5;white-space:nowrap;padding:9px 14px;cursor:pointer;font-weight:600;font-size:12px}
+.sentiment-refresh:hover,.sentiment-category:hover{border-color:#73737f}
+.sentiment-update{color:#a1a1aa;font-size:12px;margin:12px 0 20px;min-height:18px;line-height:1.6}
+.sentiment-highlights{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:20px}
+.sentiment-stat,.sentiment-report-panel{border:1px solid #303037;background:linear-gradient(160deg,#18181b,#111114);border-radius:13px;padding:22px}
+.sentiment-stat-top{display:flex;justify-content:space-between;align-items:center;gap:8px;color:#a1a1aa;font-size:13px;font-weight:650}
+.sentiment-stat a,.sentiment-source a{color:#c4b5fd;text-decoration:none;font-size:12px}.sentiment-stat a:hover,.sentiment-source a:hover{text-decoration:underline}
+.sentiment-value{font-size:clamp(36px,5vw,56px);font-weight:750;letter-spacing:-1.5px;font-variant-numeric:tabular-nums;margin:11px 0 24px;line-height:1.1}
+.sentiment-value .sentiment-status{font-size:13px;font-weight:600;letter-spacing:0;color:#c4c4cf;margin-left:11px;vertical-align:middle;display:inline-block}
+.sentiment-unavailable{font-size:24px;color:#a1a1aa}
+.sentiment-meter{position:relative;height:10px;border-radius:20px;background:linear-gradient(90deg,#2dd4bf 0%,#a3e635 28%,#fbbf24 55%,#fb7185 100%);margin:7px 6px 14px}
+.sentiment-fear-meter{background:linear-gradient(90deg,#ef4444 0%,#fb923c 25%,#facc15 50%,#86efac 75%,#10b981 100%)}
+.sentiment-meter>span{position:absolute;top:50%;width:5px;height:22px;border-radius:3px;background:#fff;border:1px solid #111;box-shadow:0 0 0 3px #0009;transform:translate(-50%,-50%)}
+.sentiment-meter-labels{display:flex;justify-content:space-between;color:#a1a1aa;font-size:10px;margin:-2px 0 12px}
+.sentiment-stat-footer{color:#a1a1aa;font-size:11px;margin:15px 0 0}
+.sentiment-report-panel{padding:0;overflow:hidden}
+.sentiment-reports-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:20px 22px 14px}
+.sentiment-reports-head h2{font-size:17px;font-weight:700;margin:0 0 5px}
+.sentiment-reports-head p{color:#a1a1aa;font-size:12px;line-height:1.5;margin:0}.sentiment-reports-head p strong{color:#d4d4d8}
+.sentiment-reports-count{font-size:11px;color:#a1a1aa;white-space:nowrap}
+.sentiment-categories{display:flex;gap:7px;flex-wrap:wrap;padding:3px 20px 18px}
+.sentiment-category{background:#1a1a1e;color:#a1a1aa;border:1px solid #35353b;border-radius:8px;padding:7px 12px;cursor:pointer;font-size:12px}
+.sentiment-category.active{background:#2a3a38;color:#5eead4;border-color:#40776b}
+.sentiment-table-wrap{overflow-x:auto}
+.sentiment-table{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}
+.sentiment-table th{background:#121215;text-align:left;text-transform:uppercase;letter-spacing:.04em;font-size:10px;font-weight:650;color:#a1a1aa;padding:14px 20px;border-top:1px solid #2b2b31;border-bottom:1px solid #2b2b31}
+.sentiment-table td{padding:15px 20px;border-bottom:1px solid #29292f;font-size:12px}
+.sentiment-table tr:last-child td{border-bottom:0}
+.sentiment-table tbody tr:hover{background:#1d1d22}
+.sentiment-item-label{display:block;color:#e4e4e7;font-weight:650;font-size:13px}
+.sentiment-item-sub{display:block;color:#a1a1aa;font-size:11px;margin-top:4px}
+.sentiment-item-value{font-variant-numeric:tabular-nums;font-weight:750;font-size:16px!important;color:#f4f4f5}
+.sentiment-unit{font-size:11px;font-weight:500;color:#a1a1aa}
+.sentiment-date,.sentiment-source{color:#a1a1aa}
+.sentiment-empty{color:#a1a1aa;padding:14px 0}
+.sentiment-disclaimer{color:#92929f;font-size:11px;line-height:1.7;margin:14px 3px 0}
+@media(max-width:680px){.sentiment-highlights{grid-template-columns:1fr}.sentiment-stat{padding:17px}.sentiment-reports-head{padding:15px}.sentiment-table th,.sentiment-table td{padding:12px 13px}.sentiment-categories{padding:0 13px 15px}.sentiment-value{font-size:40px}}

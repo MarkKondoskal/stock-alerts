@@ -6,6 +6,7 @@
   <title>StockAlerts Core</title>
 
   <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/sentiment.css?v=sentiment-20261024-1">
   <link rel="manifest" href="/static/pwa/manifest.json">
   <link rel="icon" type="image/png" sizes="192x192" href="/static/pwa/icon-192.png">
   <link rel="apple-touch-icon" href="/static/pwa/icon-192.png">
@@ -25,7 +26,7 @@
   }
 </script>
 <body><header class="top"><div class="brand"><div class="logo">↗</div><div><b>StockAlerts Core</b><small>stock-alerts-main · GitHub Actions</small></div></div><div class="topright"><span id="connection" class="pill">Not connected</span><button id="sync">↻ Sync data</button></div></header>
-<nav><button class="tab active" data-tab="overview">Holdings</button><button class="tab" data-tab="watchlist">Watchlist & Alerts</button><button class="tab" data-tab="trades">Trade Manager</button><button class="tab" data-tab="workflows">GitHub Workflows</button><button class="tab" data-tab="settings">Settings</button></nav>
+<nav><button class="tab active" data-tab="overview">Holdings</button><button class="tab" data-tab="watchlist">Watchlist & Alerts</button><button class="tab" data-tab="sentiment">Sentiment</button><button class="tab" data-tab="trades">Trade Manager</button><button class="tab" data-tab="workflows">GitHub Workflows</button><button class="tab" data-tab="settings">Settings</button></nav>
 <main><section id="login" class="panel login"><h2>Connect to your repository</h2><p>Enter the dashboard password configured on your server. Your GitHub token and Discord webhook remain server-side.</p><form id="login-form"><input id="password" type="password" placeholder="Dashboard password" required autocomplete="current-password"><button class="primary">Connect</button></form><p id="login-error" class="error"></p></section>
 <section id="overview" class="view hidden">
   <div class="heading"><div><h1>Portfolio Holdings</h1><p>Private portfolio overview · live account records and latest available market closes</p></div><button id="reload-overview" class="ghost" type="button">↻ Refresh holdings</button></div>
@@ -68,6 +69,9 @@
   </div>
 </section>
 <section id="watchlist" class="view hidden"><div class="heading"><div><h1>Watchlist & Alerts</h1><p>Edit real targets in alerts/watchlist.json and commit changes through GitHub.</p></div><div class="actions"><button id="add-ticker" class="ghost">＋ Add ticker</button><button id="save-watchlist" class="primary">Save to GitHub</button></div></div><div class="notice">Price targets trigger on downside crossings. Valuation rules use TRIM (multiple ≥ target) or BUY (multiple ≤ target). The table below edits target rules; live market metrics continue to be published by your existing Discord workflow.</div><div class="panel"><div class="tablewrap"><table><thead><tr><th>Ticker</th><th>Price targets</th><th>Forward P/E trim</th><th>Forward P/E buy</th><th>P/E trim</th><th>P/E buy</th><th>P/S trim</th><th>P/S buy</th><th></th></tr></thead><tbody id="watchlist-rows"></tbody></table></div></div><div class="actions bottom"><button id="discord-test" class="ghost">Send Discord test</button><span id="watchlist-status" class="muted"></span></div></section>
+<section id="sentiment" class="view hidden">
+  <div id="sentiment-private" class="sentiment-root"></div>
+</section>
 <section id="trades" class="view hidden">
   <div class="heading"><div><h1>Private Trade Manager</h1><p>Record completed trades in the selected private account. This does not place brokerage orders.</p></div></div>
   <div class="panel" style="max-width:760px;padding:24px">
@@ -90,5 +94,5 @@
 </section>
 <section id="workflows" class="view hidden"><div class="heading"><div><h1>GitHub Workflows</h1><p>Statuses and run history fetched directly from GitHub Actions.</p></div><button id="reload-workflows" class="ghost">Refresh runs</button></div><div class="panel"><div class="dispatch"><label>Run workflow<select id="workflow-select"><option value="stock_checker.yml">Stock & Sentiment Alert Pipeline</option><option value="watchlist_manager.yml">Watchlist Manager</option><option value="earnings_report.yml">Earnings Report</option><option value="economic_alert.yml">Economic Alert</option><option value="heartbeat.yml">Heartbeat</option><option value="portfolio_summary.yml">Portfolio Summary</option></select></label><button id="dispatch" class="primary">▶ Trigger workflow</button></div><div id="workflow-list" class="workflow-list"></div></div></section>
 <section id="settings" class="view hidden"><div class="heading"><div><h1>Settings & connection</h1><p>Connection details and safe operation.</p></div></div><div class="panel settings"><h2>Connected services</h2><div class="setting-row"><div><b>GitHub repository</b><p>Configured server-side with GITHUB_REPOSITORY</p></div><span class="pill">Server-side</span></div><div class="setting-row"><div><b>GitHub Actions</b><p>Read workflow runs and dispatch approved workflows.</p></div><span class="pill">GitHub API</span></div><div class="setting-row"><div><b>Discord</b><p>Test uses the server-side DISCORD_STOCK_WEBHOOK secret.</p></div><span class="pill">Secret protected</span></div><button id="logout" class="ghost">Disconnect this browser</button></div></section>
-<div id="toast" class="toast hidden"></div></main><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js" defer></script><script src="/static/app.js?v=private-holdings-20261024-1" defer></script><script src="/static/private_holdings.js?v=private-holdings-20261024-1" defer></script></body></html>
+<div id="toast" class="toast hidden"></div></main><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js" defer></script><script src="/static/app.js?v=private-holdings-20261024-1" defer></script><script src="/static/private_holdings.js?v=private-holdings-20261024-1" defer></script><script src="/static/sentiment_ui.js?v=sentiment-20261024-1" defer></script></body></html>
 
