@@ -5,3 +5,32 @@
 #trade-form input,#trade-form select{width:100%;min-width:0;color:var(--text);background:#09090b;border:1px solid #35353d;border-radius:8px;padding:10px}
 .trade-preview{border:1px solid #33344a;background:#171721;border-radius:9px;padding:14px;color:#e2e2f4;font-size:13px;line-height:1.6}
 #trade-history-rows td{font-variant-numeric:tabular-nums}
+
+/* Private holdings dashboard mirrors the public dashboard but exposes authenticated values. */
+.private-controls{display:flex;gap:13px 26px;flex-wrap:wrap;align-items:center;margin:6px 0 13px}
+.private-control-group{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.private-segment{display:inline-flex;gap:3px;padding:4px;background:#18181b;border:1px solid #34343b;border-radius:10px}
+.private-segment .private-filter{background:transparent;border:0;border-radius:7px;color:#a1a1aa;font-size:12px;padding:8px 11px;white-space:nowrap}
+.private-segment .private-filter.active{color:#fff;background:#3b3b43;box-shadow:0 1px 3px #0007}
+.private-freshness{margin-bottom:19px;line-height:1.7}
+.private-metrics{grid-template-columns:repeat(4,minmax(0,1fr))}
+.private-metrics .metric strong{font-size:23px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.private-positive{color:#2dd4bf!important}.private-negative{color:#fb7185!important}
+.private-panel-head{align-items:center;flex-wrap:wrap}
+.private-periods{display:flex;gap:4px;flex-wrap:wrap}
+.private-periods button{padding:7px 10px;background:transparent;border:1px solid #38383e;font-size:11px;border-radius:6px;color:#a1a1aa}
+.private-periods button.active{background:#3b3b43;color:#fff;border-color:#5a5a63}
+.private-performance-line{display:flex;justify-content:space-between;gap:18px;align-items:center;margin:13px 2px 12px}
+.private-big-return{font-size:clamp(32px,5vw,56px);font-weight:750;color:#2dd4bf;letter-spacing:-1.7px;margin:6px 0}
+.private-comparison{text-align:right;display:flex;flex-direction:column;gap:4px}.private-comparison strong{font-size:21px}
+.private-chart-frame{position:relative;width:100%}.private-performance-chart{height:340px;margin-bottom:12px}
+.private-chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.private-donut{height:275px}.private-gainers-chart{height:290px}
+.private-chart-frame canvas{max-width:100%;max-height:100%}
+.private-holdings-table{font-variant-numeric:tabular-nums}.private-holdings-table th,.private-holdings-table td{padding:12px 10px}
+.private-holdings-table th.num,.private-holdings-table td.num{text-align:right}
+.private-holdings-table td:nth-child(3){color:#a1a1aa}.private-holdings-table tr.private-price-missing{opacity:.67}
+.private-allocation-wrap{display:flex;align-items:center;gap:9px;justify-content:flex-end}.private-allocation-track{background:#282832;height:5px;width:60px;border-radius:10px;overflow:hidden}.private-allocation-fill{height:100%;background:#2dd4bf;border-radius:10px}
+.private-table-note{margin-top:15px;line-height:1.7}
+@media(max-width:900px){.private-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.private-chart-grid{grid-template-columns:1fr}}
+@media(max-width:500px){.private-controls{align-items:flex-start;flex-direction:column}.private-metrics{grid-template-columns:1fr 1fr;gap:8px}.private-metrics .metric{padding:12px}.private-metrics .metric strong{font-size:18px}.private-donut{height:255px}.private-performance-chart{height:260px}}

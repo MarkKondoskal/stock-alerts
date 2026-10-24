@@ -25,9 +25,48 @@
   }
 </script>
 <body><header class="top"><div class="brand"><div class="logo">↗</div><div><b>StockAlerts Core</b><small>stock-alerts-main · GitHub Actions</small></div></div><div class="topright"><span id="connection" class="pill">Not connected</span><button id="sync">↻ Sync data</button></div></header>
-<nav><button class="tab active" data-tab="overview">Portfolio Overview</button><button class="tab" data-tab="watchlist">Watchlist & Alerts</button><button class="tab" data-tab="trades">Trade Manager</button><button class="tab" data-tab="workflows">GitHub Workflows</button><button class="tab" data-tab="settings">Settings</button></nav>
+<nav><button class="tab active" data-tab="overview">Holdings</button><button class="tab" data-tab="watchlist">Watchlist & Alerts</button><button class="tab" data-tab="trades">Trade Manager</button><button class="tab" data-tab="workflows">GitHub Workflows</button><button class="tab" data-tab="settings">Settings</button></nav>
 <main><section id="login" class="panel login"><h2>Connect to your repository</h2><p>Enter the dashboard password configured on your server. Your GitHub token and Discord webhook remain server-side.</p><form id="login-form"><input id="password" type="password" placeholder="Dashboard password" required autocomplete="current-password"><button class="primary">Connect</button></form><p id="login-error" class="error"></p></section>
-<section id="overview" class="view hidden"><div class="heading"><div><h1>Portfolio Overview</h1><p>Live private account records (not the old legacy portfolio).</p></div><button class="ghost" id="reload-overview">Refresh</button></div><div class="metrics"><article class="metric"><label>US · Merrill</label><strong id="position-count">—</strong><small>Current account positions</small></article><article class="metric"><label>DK · Nordnet</label><strong id="cost-basis">—</strong><small>Current account positions</small></article><article class="metric"><label>Combined tickers</label><strong id="realized-pl">—</strong><small>Distinct stocks and ETFs</small></article></div><div class="panel"><div class="panel-title"><div><h2>Portfolio holdings</h2><p id="portfolio-note">Data read from Merrill and Nordnet private JSON files</p></div></div><div class="tablewrap"><table><thead><tr><th>Account</th><th>Ticker</th><th>Shares</th><th>Average cost</th><th>Position snapshot</th></tr></thead><tbody id="portfolio-rows"></tbody></table></div></div></section>
+<section id="overview" class="view hidden">
+  <div class="heading"><div><h1>Portfolio Holdings</h1><p>Private portfolio overview · live account records and latest available market closes</p></div><button id="reload-overview" class="ghost" type="button">↻ Refresh holdings</button></div>
+  <div class="private-controls" aria-label="Private portfolio filters">
+    <div class="private-control-group"><span class="muted">Account</span><div class="private-segment" role="group" aria-label="Account">
+      <button type="button" class="private-filter active" data-private-account="combined" aria-pressed="true">Combined</button>
+      <button type="button" class="private-filter" data-private-account="us" aria-pressed="false">US · Merrill</button>
+      <button type="button" class="private-filter" data-private-account="dk" aria-pressed="false">DK · Nordnet</button>
+    </div></div>
+    <div class="private-control-group"><span class="muted">Currency</span><div class="private-segment" role="group" aria-label="Display currency">
+      <button type="button" class="private-filter active" data-private-currency="USD" aria-pressed="true">USD $</button>
+      <button type="button" class="private-filter" data-private-currency="DKK" aria-pressed="false">DKK kr</button>
+    </div></div>
+    <div class="private-control-group"><span class="muted">ETFs</span><div class="private-segment" role="group" aria-label="Include ETFs">
+      <button type="button" class="private-filter active" data-private-etfs="excluded" aria-pressed="true">Excluded</button>
+      <button type="button" class="private-filter" data-private-etfs="included" aria-pressed="false">Included</button>
+    </div></div>
+  </div>
+  <p class="private-freshness muted" id="private-freshness" role="status">Loading private account snapshots…</p>
+  <div class="metrics private-metrics">
+    <article class="metric"><label>Total market value</label><strong id="private-market-value">—</strong><small>Open invested positions · excludes cash</small></article>
+    <article class="metric"><label>Open-position cost basis</label><strong id="private-cost-basis">—</strong><small>Translated at today's exchange rate</small></article>
+    <article class="metric"><label>Unrealized P/L</label><strong id="private-unrealized">—</strong><small id="private-unrealized-pct">Excludes realized gains</small></article>
+    <article class="metric"><label>Holdings</label><strong id="private-position-count">—</strong><small id="private-ticker-count">Distinct tickers across accounts</small></article>
+  </div>
+  <div class="panel private-history-panel">
+    <div class="panel-title private-panel-head"><div><h2>Portfolio vs. S&amp;P 500 (SPY)</h2><p>Investment-only percentage return · matched trading dates</p></div><div id="private-performance-periods" class="private-periods" aria-label="Performance period"></div></div>
+    <div class="private-performance-line"><div><span class="muted">Portfolio return</span><div class="private-big-return" id="private-performance-return">—</div><p class="muted" id="private-performance-baseline">Historical performance from private reconstruction</p></div><div class="private-comparison"><span class="muted">Compared with SPY</span><strong id="private-spy-difference">—</strong><small class="muted">Percentage-point difference</small></div></div>
+    <div class="private-chart-frame private-performance-chart"><canvas id="private-performance-chart" aria-label="Private portfolio and SPY performance"></canvas></div>
+    <p class="muted" id="private-performance-note" role="status">Loading performance…</p>
+  </div>
+  <div class="private-chart-grid">
+    <div class="panel"><div class="panel-title"><h2>Holdings allocation</h2></div><div class="private-chart-frame private-donut"><canvas id="private-holdings-chart" aria-label="Market value allocation by ticker"></canvas></div></div>
+    <div class="panel"><div class="panel-title"><h2>Sector allocation</h2></div><div class="private-chart-frame private-donut"><canvas id="private-sector-chart" aria-label="Market value allocation by sector"></canvas></div></div>
+  </div>
+  <div class="panel"><div class="panel-title private-panel-head"><div><h2>Biggest gainers &amp; losers</h2><p>Price return by ticker, not dollar P/L</p></div><div id="private-gainers-periods" class="private-periods" aria-label="Gainers period"></div></div><div class="private-chart-frame private-gainers-chart"><canvas id="private-gainers-chart" aria-label="Biggest gainers and losers"></canvas></div><p id="private-gainers-note" class="muted" role="status">Loading price returns…</p></div>
+  <div class="panel"><div class="panel-title"><div><h2>Current holdings</h2><p>Sorted by market value · includes amounts visible only on this password-protected dashboard</p></div></div>
+    <div class="tablewrap"><table class="private-holdings-table"><thead><tr><th>Ticker</th><th>Sector</th><th>Account</th><th class="num">Shares</th><th class="num">Avg. cost</th><th class="num">Last price</th><th class="num">Market value</th><th class="num">Cost basis</th><th class="num">Unrealized P/L</th><th class="num">Return</th><th class="num">Allocation</th></tr></thead><tbody id="private-holdings-rows"><tr><td colspan="11">Loading account data…</td></tr></tbody></table></div>
+    <p class="muted private-table-note" id="private-valuation-note">Values use latest available closing prices and exclude cash, brokerage fees and realized P/L.</p>
+  </div>
+</section>
 <section id="watchlist" class="view hidden"><div class="heading"><div><h1>Watchlist & Alerts</h1><p>Edit real targets in alerts/watchlist.json and commit changes through GitHub.</p></div><div class="actions"><button id="add-ticker" class="ghost">＋ Add ticker</button><button id="save-watchlist" class="primary">Save to GitHub</button></div></div><div class="notice">Price targets trigger on downside crossings. Valuation rules use TRIM (multiple ≥ target) or BUY (multiple ≤ target). The table below edits target rules; live market metrics continue to be published by your existing Discord workflow.</div><div class="panel"><div class="tablewrap"><table><thead><tr><th>Ticker</th><th>Price targets</th><th>Forward P/E trim</th><th>Forward P/E buy</th><th>P/E trim</th><th>P/E buy</th><th>P/S trim</th><th>P/S buy</th><th></th></tr></thead><tbody id="watchlist-rows"></tbody></table></div></div><div class="actions bottom"><button id="discord-test" class="ghost">Send Discord test</button><span id="watchlist-status" class="muted"></span></div></section>
 <section id="trades" class="view hidden">
   <div class="heading"><div><h1>Private Trade Manager</h1><p>Record completed trades in the selected private account. This does not place brokerage orders.</p></div></div>
@@ -51,5 +90,5 @@
 </section>
 <section id="workflows" class="view hidden"><div class="heading"><div><h1>GitHub Workflows</h1><p>Statuses and run history fetched directly from GitHub Actions.</p></div><button id="reload-workflows" class="ghost">Refresh runs</button></div><div class="panel"><div class="dispatch"><label>Run workflow<select id="workflow-select"><option value="stock_checker.yml">Stock & Sentiment Alert Pipeline</option><option value="watchlist_manager.yml">Watchlist Manager</option><option value="earnings_report.yml">Earnings Report</option><option value="economic_alert.yml">Economic Alert</option><option value="heartbeat.yml">Heartbeat</option><option value="portfolio_summary.yml">Portfolio Summary</option></select></label><button id="dispatch" class="primary">▶ Trigger workflow</button></div><div id="workflow-list" class="workflow-list"></div></div></section>
 <section id="settings" class="view hidden"><div class="heading"><div><h1>Settings & connection</h1><p>Connection details and safe operation.</p></div></div><div class="panel settings"><h2>Connected services</h2><div class="setting-row"><div><b>GitHub repository</b><p>Configured server-side with GITHUB_REPOSITORY</p></div><span class="pill">Server-side</span></div><div class="setting-row"><div><b>GitHub Actions</b><p>Read workflow runs and dispatch approved workflows.</p></div><span class="pill">GitHub API</span></div><div class="setting-row"><div><b>Discord</b><p>Test uses the server-side DISCORD_STOCK_WEBHOOK secret.</p></div><span class="pill">Secret protected</span></div><button id="logout" class="ghost">Disconnect this browser</button></div></section>
-<div id="toast" class="toast hidden"></div></main><script src="/static/app.js?v=trade-integration-20261024-2"></script></body></html>
+<div id="toast" class="toast hidden"></div></main><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js" defer></script><script src="/static/app.js?v=private-holdings-20261024-1" defer></script><script src="/static/private_holdings.js?v=private-holdings-20261024-1" defer></script></body></html>
 

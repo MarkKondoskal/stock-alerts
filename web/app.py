@@ -805,6 +805,53 @@ def public_workflows_get():
 
 
 
+@app.get('/api/private/holdings/snapshot')
+def private_holdings_snapshot_get():
+    """Latest private market values from the SAME two account files as /public."""
+    err = require_auth()
+    if err:
+        return err
+    account = request.args.get('account', 'combined').lower()
+    currency = request.args.get('currency', 'USD').upper()
+    etfs = request.args.get('etfs', 'excluded').lower()
+    if account not in ('combined', 'us', 'dk') or currency not in ('USD', 'DKK') or etfs not in ('excluded', 'included'):
+        return jsonify({'error': 'Invalid account, currency or ETF filter'}), 400
+    try:
+        from private_holdings import private_snapshot
+        us, dk = _account_documents()
+        result = jsonify(private_snapshot(us, dk, account, currency, etfs == 'included'))
+        result.headers['Cache-Control'] = 'private, no-store'
+        return result
+    except Exception:
+        app.logger.exception('Private valuation unavailable')
+        return jsonify({'error': 'Could not load account values or market prices; retry later.'}), 502
+
+
+@app.get('/api/private/holdings/analytics')
+def private_holdings_analytics_get():
+    """Read-only performance data; uses exactly the same series as /public."""
+    err = require_auth()
+    if err:
+        return err
+    account = request.args.get('account', 'combined').lower()
+    currency = request.args.get('currency', 'USD').upper()
+    etfs = request.args.get('etfs', 'excluded').lower()
+    period = request.args.get('period', 'YTD').upper()
+    from account_public import PERIODS
+    if account not in ('combined', 'us', 'dk') or currency not in ('USD', 'DKK') or etfs not in ('excluded', 'included') or period not in PERIODS:
+        return jsonify({'error': 'Invalid account, currency, ETF filter or period'}), 400
+    try:
+        from account_public import analytics
+        us, dk = _account_documents()
+        result = jsonify(analytics(us, dk, account, period, _private_csv,
+                                   currency=currency, include_etfs=(etfs == 'included')))
+        result.headers['Cache-Control'] = 'private, no-store'
+        return result
+    except Exception:
+        app.logger.exception('Private historical analytics unavailable')
+        return jsonify({'error': 'Could not load portfolio historical analytics.'}), 502
+
+
 @app.get('/api/private/accounts')
 def private_accounts():
     err=require_auth()
