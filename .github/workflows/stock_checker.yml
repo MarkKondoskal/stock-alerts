@@ -6,6 +6,11 @@ on:
     - cron: '*/15 7-21 * * 1-5' 
   workflow_dispatch:
 
+# Both workflows can edit alerts/watchlist.json. Run only one at a time.
+concurrency:
+  group: stock-alerts-watchlist-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   run-alert-monitors:
     runs-on: ubuntu-latest
@@ -39,15 +44,4 @@ jobs:
 
       # --- 3. AUTO-COMMIT UPDATES ---
       - name: Auto-commit Watchlist & Sentiment State
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Stage both the watchlist AND the sentiment state file
-          git add alerts/watchlist.json alerts/sentiment_state.json
-          
-          # Commit & push only if there are changes staged
-          if ! git diff --staged --quiet; then
-            git commit -m "Auto-updated price targets and sentiment state"
-            git push
-          fi
+        run: bash .github/scripts/commit_and_push.sh "Auto-updated price targets and sentiment state" alerts/watchlist.json alerts/sentiment_state.json

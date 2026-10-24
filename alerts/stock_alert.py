@@ -27,22 +27,35 @@ def normalize_entry(entry):
 
 
 def load_watchlist():
-    try:
-        with open(WATCHLIST_FILE, "r") as f:
-            raw = json.load(f)
-        return {str(symbol).strip().upper(): normalize_entry(entry) for symbol, entry in raw.items()}
-    except Exception as e:
-        print(f"Error loading {WATCHLIST_FILE}: {e}")
-        return {}
+    # A missing or invalid watchlist is a workflow failure, not an empty watchlist:
+    # silently returning {} would mask configuration mistakes and lost alerts.
+    with open(WATCHLIST_FILE, "r", encoding="utf-8") as f:
+        raw = json.load(f)
+    if not isinstance(raw, dict):
+        raise ValueError("watchlist.json must contain an object keyed by ticker")
+    return {str(symbol).strip().upper(): normalize_entry(entry) for symbol, entry in raw.items()}
 
 
 def save_watchlist(watchlist):
+    # Write atomically; if persisting successful deliveries fails, make the job
+    # red rather than silently repeating those notifications in the next run.
+    from pathlib import Path
+    import tempfile
+
+    destination = Path(WATCHLIST_FILE)
+    temp_path = None
     try:
-        with open(WATCHLIST_FILE, "w") as f:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=destination.parent,
+                                         prefix=".watchlist-", suffix=".tmp", delete=False) as f:
+            temp_path = Path(f.name)
             json.dump(watchlist, f, indent=2)
+            f.write("\n")
+        os.replace(temp_path, destination)
         print("Updated watchlist.json saved successfully.")
-    except Exception as e:
-        print(f"Error saving watchlist: {e}")
+    except Exception:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+        raise
 
 
 def send_discord_alert(symbol, current_price, day_low, target_price):
@@ -59,7 +72,13 @@ def send_discord_alert(symbol, current_price, day_low, target_price):
         "footer": {"text": "Target met today and auto-removed from watchlist"},
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     }]}
-    response = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=15)
+    try:
+        response = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=15)
+    except requests.RequestException as exc:
+        # Return False instead of raising: an exception here would abort the whole
+        # symbol and keep targets that were already delivered (duplicate alerts).
+        print(f"Failed to send alert for {symbol}: {exc}")
+        return False
     if response.status_code not in [200, 204]:
         print(f"Failed to send alert: {response.status_code}, {response.text}")
         return False
@@ -137,6 +156,7 @@ def check_prices():
         if not price_targets and not valuation_targets:
             updated[symbol] = entry
             continue
+        delivered_prices = []  # price targets Discord has already accepted
         try:
             ticker = data.tickers[symbol]
             fast = ticker.fast_info
@@ -148,6 +168,7 @@ def check_prices():
                 if check_price is not None and check_price <= target:
                     if send_discord_alert(symbol, float(current_price or check_price), float(check_price), float(target)):
                         changed = True
+                        delivered_prices.append(target)
                     else:
                         remaining_prices.append(target)
                 else:
@@ -183,8 +204,15 @@ def check_prices():
             if remaining_prices or remaining_valuations:
                 updated[symbol] = {"price_targets": remaining_prices, "valuation_targets": remaining_valuations}
         except Exception as exc:
-            print(f"Error processing {symbol}; preserving targets: {exc}")
-            updated[symbol] = entry
+            print(f"Error processing {symbol}; preserving undelivered targets: {exc}")
+            # Drop only the price targets that were already delivered so they are
+            # not sent again; everything else (including unprocessed targets) stays.
+            if delivered_prices:
+                changed = True
+            leftover = [t for t in price_targets if t not in delivered_prices]
+            if leftover or valuation_targets:
+                updated[symbol] = {"price_targets": leftover,
+                                   "valuation_targets": valuation_targets}
 
     if changed:
         save_watchlist(updated)

@@ -302,13 +302,14 @@ def _make_embeds(rows, ticker_count):
 
 
 def send_watchlist_to_discord():
+    """Post the watchlist table. Returns True only if Discord accepted it."""
     data = load_watchlist()
     if not data:
-        print("Watchlist is empty – nothing to send.")
-        return
+        print("Watchlist is empty – no Discord status was sent.")
+        return False
     if not DISCORD_WEBHOOK_URL:
         print("Error: No Discord webhook URL configured.")
-        return
+        return False
 
     rows = []
     for ticker in sorted(data):
@@ -338,8 +339,10 @@ def send_watchlist_to_discord():
         response = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=30)
         response.raise_for_status()
         print("Watchlist with prices, valuations and revenue growth sent to Discord.")
+        return True
     except Exception as exc:
         print(f"Failed to send watchlist: {exc}")
+        return False
 
 
 def main():
@@ -376,7 +379,9 @@ def main():
     elif action == "LIST":
         list_watchlist()
     elif action in ("STATUS", "SEND"):
-        send_watchlist_to_discord()
+        if not send_watchlist_to_discord():
+            # Non-zero exit makes the GitHub Actions run show as failed.
+            sys.exit(1)
     else:
         print(f"Unknown action: {action}")
         sys.exit(1)

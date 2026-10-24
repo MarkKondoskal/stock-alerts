@@ -28,6 +28,8 @@ on:
 jobs:
   manage-portfolio:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Repository
@@ -55,7 +57,6 @@ jobs:
 
       - name: Auto-commit Portfolio Changes
         if: github.event.inputs.action != 'STATUS'
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git diff --quiet || (git add portfolio/marks_portfolio.json && git commit -m "Update portfolio: ${{ github.event.inputs.action }} ${{ github.event.inputs.ticker }}" && git push)
+        env:
+          COMMIT_MSG: "Update portfolio: ${{ github.event.inputs.action }} ${{ github.event.inputs.ticker }}"
+        run: bash .github/scripts/commit_and_push.sh "$COMMIT_MSG" portfolio/marks_portfolio.json

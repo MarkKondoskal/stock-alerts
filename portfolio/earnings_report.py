@@ -25,6 +25,8 @@ except ImportError as e:
 WEBHOOK_URL = os.environ.get("DISCORD_PORTFOLIO_WEBHOOK")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PORTFOLIO_FILE = os.path.join(BASE_DIR, "marks_portfolio.json")
+# Remembers which earnings were already posted so the hourly schedule doesn't repeat them.
+STATE_FILE = os.path.join(BASE_DIR, "earnings_state.json")
 
 print(f"DEBUG: WEBHOOK_URL set? {bool(WEBHOOK_URL)}", flush=True)
 print(f"DEBUG: PORTFOLIO_FILE = {PORTFOLIO_FILE}", flush=True)
@@ -32,6 +34,25 @@ print(f"DEBUG: PORTFOLIO_FILE = {PORTFOLIO_FILE}", flush=True)
 # -----------------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------------
+
+def load_state():
+    """Return {ticker: "YYYY-MM-DD"} of earnings dates already posted to Discord."""
+    try:
+        with open(STATE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except FileNotFoundError:
+        return {}
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"⚠️ Could not read earnings state: {e}", flush=True)
+        return {}
+
+
+def save_state(state):
+    with open(STATE_FILE, "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2, sort_keys=True)
+        f.write("\n")
+
 
 def safe_float(value, default=None):
     try:
@@ -358,6 +379,7 @@ def main():
     print("=" * 60, flush=True)
 
     reports = []
+    posted_state = load_state()
 
     # --- Process portfolio ---
     print("\n--- PROCESSING PORTFOLIO ---", flush=True)
@@ -374,6 +396,9 @@ def main():
             earnings_date = data.get("earnings_date")
             if earnings_date != today:
                 print(f"⏭️ {ticker}: did not report today → skipping", flush=True)
+                continue
+            if posted_state.get(ticker) == str(earnings_date):
+                print(f"⏭️ {ticker}: today's earnings already posted → skipping", flush=True)
                 continue
             print(f"🚨 {ticker}: REPORTED TODAY → adding to report", flush=True)
         else:
@@ -404,8 +429,13 @@ def main():
         success = post_to_discord(data)
         if success:
             successful += 1
+            if report_mode == "today":
+                posted_state[ticker] = str(data.get("earnings_date"))
         else:
             failed += 1
+
+    if report_mode == "today" and successful:
+        save_state(posted_state)
 
     print("\n" + "=" * 60, flush=True)
     print("DISCORD REPORT SUMMARY", flush=True)

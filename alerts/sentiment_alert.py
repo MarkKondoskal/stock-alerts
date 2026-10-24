@@ -321,13 +321,17 @@ def check_fear_and_greed():
         previous_state = state.get("fear_greed_state")
 
         if should_alert and new_state != previous_state:
-            state["fear_greed_state"] = new_state
             print(f"TRIGGER: Fear & Greed changed to {new_state}.")
-            send_discord_sentiment_alert(
+            sent = send_discord_sentiment_alert(
                 title=title,
                 fields=fields,
                 color=color,
             )
+            if sent:
+                state["fear_greed_state"] = new_state
+            else:
+                # Leave the old state in place so the next run retries the alert.
+                print("Fear & Greed alert NOT delivered; state unchanged so it will retry.")
         elif new_state == "normal" and previous_state != "normal":
             print(f"Fear & Greed returned to normal (Score: {score:.1f}). No alert sent.")
             state["fear_greed_state"] = new_state

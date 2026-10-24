@@ -15,9 +15,15 @@ on:
   schedule:
     - cron: '0 * * * *'
 
+# Runs hourly on purpose: results are published at different times, and the script
+# only posts once the reported EPS is available. earnings_state.json stops a report
+# from being re-posted on every later run that day.
+
 jobs:
   earnings:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Repository
@@ -42,3 +48,6 @@ jobs:
           echo "=== WORKFLOW START ==="
           python -u portfolio/earnings_report.py
           echo "=== WORKFLOW END ==="
+
+      - name: Commit & push earnings state
+        run: bash .github/scripts/commit_and_push.sh "Update earnings report state" portfolio/earnings_state.json

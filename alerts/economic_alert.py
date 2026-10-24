@@ -236,15 +236,23 @@ def format_fred_value(series_id: str, value: float) -> str:
     Percentage-based series are displayed with %.
     """
 
+    # Only true percentages get a % sign. CPIAUCSL and PCEPI are index
+    # levels (e.g. 336.298), so they are shown as plain numbers.
     percentage_series = {
         "UNRATE",
-        "CPIAUCSL",
         "A191RL1Q225SBEA",
+    }
+
+    index_series = {
+        "CPIAUCSL",
         "PCEPI",
     }
 
     if series_id in percentage_series:
         return f"{value:.2f}%"
+
+    if series_id in index_series:
+        return f"{value:,.3f}"
 
     if series_id == "PAYEMS":
         return f"{value:,.0f}"
@@ -399,7 +407,7 @@ def check_fred_series(
         f"**Current:** {current_display}\n"
         f"**Previous:** {previous_display}\n"
         f"**Change:** "
-        f"{latest_value - last_value:+,.2f}\n"
+        f"{latest_value - last_value:+,.{3 if series_id in ('CPIAUCSL', 'PCEPI') else 2}f}\n"
         f"**Release:** {latest_date}\n\n"
         f"{name} {direction}."
     )

@@ -2,7 +2,9 @@ name: US Economic Data Monitor
 
 on:
   schedule:
-    # Runs at 13:30 UTC, Monday–Friday (covers US morning releases)
+    # Runs hourly, Monday–Friday. Hourly (not a single daily run) so it catches
+    # 08:30 ET data releases, the weekly jobless claims, and FOMC statements
+    # (14:00 ET). The bot only alerts when a value actually changes.
     - cron: '0 * * * 1-5'
   workflow_dispatch:  # allows manual testing
 
@@ -34,7 +36,4 @@ jobs:
           python alerts/economic_alert.py
 
       - name: Commit & push state updates
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git diff --quiet || (git add alerts/economic_state.json && git commit -m "Update economic data state" && git push)
+        run: bash .github/scripts/commit_and_push.sh "Update economic data state" alerts/economic_state.json

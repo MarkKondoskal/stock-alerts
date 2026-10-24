@@ -41,6 +41,11 @@ on:
           - PE
           - P/S
 
+# Both workflows can edit alerts/watchlist.json. Run only one at a time.
+concurrency:
+  group: stock-alerts-watchlist-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   manage-watchlist:
     runs-on: ubuntu-latest
@@ -70,7 +75,6 @@ jobs:
 
       - name: Commit & push changes
         if: github.event.inputs.action != 'LIST' && github.event.inputs.action != 'STATUS'
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git diff --quiet || (git add alerts/watchlist.json && git commit -m "Update watchlist: ${{ github.event.inputs.action }} ${{ github.event.inputs.ticker }}" && git push)
+        env:
+          COMMIT_MSG: "Update watchlist: ${{ github.event.inputs.action }} ${{ github.event.inputs.ticker }}"
+        run: bash .github/scripts/commit_and_push.sh "$COMMIT_MSG" alerts/watchlist.json
