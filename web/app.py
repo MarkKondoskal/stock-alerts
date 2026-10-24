@@ -814,14 +814,55 @@ def private_accounts():
         result={}
         for account,path in FILES.items():
             data,_=get_file(path,data=True)
-            result[account]={'positions_as_of':data.get('positions_as_of'),
-                             'positions':[{'ticker':p['ticker'],'quantity':p['quantity'],
-                                           'average_cost_per_share':p.get('average_cost_per_share'),
-                                           'cost_currency':p.get('cost_currency')} for p in data.get('positions',[])]}
-        return jsonify(result)
+            result[account]={
+                'account_name': data.get('account_name',account),
+                'positions_as_of':data.get('positions_as_of'),
+                'manual_trade_last_updated':data.get('manual_trade_last_updated'),
+                'positions':[
+                    {'ticker':p['ticker'],'quantity':p['quantity'],
+                     'average_cost_per_share':p.get('average_cost_per_share'),
+                     'cost_currency':p.get('cost_currency')}
+                    for p in data.get('positions',[])],
+            }
+        response=jsonify(result)
+        response.headers['Cache-Control']='no-store'
+        return response
     except Exception:
         app.logger.exception('Private accounts query failed')
         return jsonify({'error':'Could not load private accounts'}),502
+
+
+@app.get('/api/private/trades')
+def private_trade_history():
+    """Recent manual transactions for authenticated owners only; NEVER public."""
+    err=require_auth()
+    if err:return err
+    try:
+        from trade_manager import FILES
+        events=[]
+        for account,path in FILES.items():
+            data,_=get_file(path,data=True)
+            for t in data.get('transactions',[]):
+                if t.get('source') != 'manual_private_dashboard':
+                    continue
+                events.append({
+                    'event_id':t.get('event_id'),
+                    'account':account,
+                    'action':t.get('action'),
+                    'date':t.get('date') or t.get('trade_date'),
+                    'ticker':t.get('ticker'),
+                    'quantity':t.get('quantity'),
+                    'price':t.get('price_usd') if account=='us' else t.get('execution_price_per_share'),
+                    'currency':'USD' if account=='us' else t.get('price_currency'),
+                })
+        events.sort(key=lambda e:(e['date'] or '',e['event_id'] or ''),reverse=True)
+        response=jsonify({'transactions':events[:30],'count':len(events)})
+        response.headers['Cache-Control']='no-store'
+        return response
+    except Exception:
+        app.logger.exception('Private trade history query failed')
+        return jsonify({'error':'Could not read private transactions'}),502
+
 
 @app.post('/api/private/trades')
 def private_trade_add():
@@ -831,11 +872,21 @@ def private_trade_add():
     body=request.get_json(silent=True)
     try:
         from trade_manager import FILES,record_trade
+        import uuid
         if not isinstance(body,dict) or body.get('account') not in FILES:
             return jsonify({'error':'Select an account'}),400
         path=FILES[body['account']]
-        # Read SHA once; writing with this SAME SHA rejects concurrent changes (HTTP 409).
         source,sha=get_file(path,data=True)
+        # Idempotent retry after a saved commit but a lost HTTP response.
+        client_id=body.get('client_trade_id')
+        if client_id is not None:
+            try: client_id=str(uuid.UUID(str(client_id)))
+            except (TypeError,ValueError,AttributeError):
+                return jsonify({'error':'Invalid transaction request ID'}),400
+            if any(t.get('event_id')==client_id for t in source.get('transactions',[])):
+                return jsonify({'ok':True,'already_recorded':True,'event_id':client_id,
+                                'message':'This trade was already recorded. No duplicate created.',
+                                'recalculation_requested':False})
         data,event=record_trade(source,body)
         _,branch=repository_and_branch(data=True)
         encoded=base64.b64encode((json.dumps(data,indent=2,ensure_ascii=False)+'\n').encode()).decode()
@@ -845,13 +896,33 @@ def private_trade_add():
         if response.status_code in (409,422):
             return jsonify({'error':'Account changed while saving. Refresh and retry; do not double-submit.'}),409
         response.raise_for_status()
-        return jsonify({'ok':True,'event_id':event['event_id'],
-                        'message':'Trade recorded in private account ledger. Returns update in the next calculation run.'})
+        # The trade has ALREADY been saved. Failure to schedule calculations must
+        # not tell the user the trade failed (or tempt them to submit twice).
+        dispatched=False
+        try:
+            dispatch=requests.post(
+                api_repo_url('actions/workflows/daily_portfolio_performance.yml/dispatches',data=True),
+                headers=gh_headers(),json={'ref':branch},timeout=15)
+            dispatched=dispatch.status_code==204
+            if not dispatched:
+                app.logger.warning('Trade saved but recalculation dispatch returned %s',dispatch.status_code)
+        except requests.RequestException:
+            app.logger.exception('Trade saved; performance dispatch failed')
+        result=jsonify({
+            'ok':True,'event_id':event['event_id'],
+            'recalculation_requested':dispatched,
+            'message':('Trade saved privately. Performance recalculation requested.' if dispatched
+                       else 'Trade saved privately. Automatic recalculation could not start; the scheduled workflow will still run.')
+        })
+        result.headers['Cache-Control']='no-store'
+        return result
     except ValueError as exc:
         return jsonify({'error':str(exc)}),400
+    except requests.Timeout:
+        return jsonify({'error':'GitHub timed out. Check recent trades before retrying; use the same request ID.'}),504
     except Exception:
         app.logger.exception('Private trade save failed')
-        return jsonify({'error':'Could not save the trade in GitHub. Check server logs.'}),502
+        return jsonify({'error':'Could not confirm the trade save. Check recent trades before retrying.'}),502
 
 if __name__ == "__main__":
     # Local development only. Use Gunicorn for deployment.

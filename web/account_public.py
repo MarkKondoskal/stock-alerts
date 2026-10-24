@@ -111,7 +111,13 @@ def snapshot(us,dk,account,currency="USD",include_etfs=False):
         result.sort(key=lambda x: (x['allocation_pct'] is None,-(x['allocation_pct'] or 0)))
         return {'holdings':result,'sectors':[{'sector':s,'allocation_pct':round(100*v/total,2)} for s,v in sorted(sector_values.items(),key=lambda x:-x[1])] if total else [],
                 'basis':'latest market value','missing_tickers':sorted(missing),
-                'as_of':datetime.now(timezone.utc).isoformat(), 'account':account,'currency':currency,'include_etfs':include_etfs}
+                'as_of':datetime.now(timezone.utc).isoformat(),
+                # Snapshot dates are public metadata only; no raw trades/quantities.
+                'positions_as_of':{
+                    key:doc.get('positions_as_of') for key,doc in (('us',us),('dk',dk))
+                    if account in ('combined',key)
+                },
+                'account':account,'currency':currency,'include_etfs':include_etfs}
     return _cached(('snapshot',account,currency,include_etfs,tuple(sorted((p['ticker'],p['quantity'],p['cost']) for p in positions))),build)
 
 def _series(csv_text, portfolio_col, spy_col):
@@ -222,5 +228,6 @@ def analytics(us,dk,account,period,read_csv,currency='USD',include_etfs=False):
             'spy':[{'date':p['date'],'value':p['spy']} for p in performance],
             'gainers':gainers,'performance_note':note,
             'available_from':performance[0]['date'] if performance else None,
+            'performance_through':performance[-1]['date'] if performance else None,
             'missing_tickers':sorted(set(p['ticker'] for p in positions)-set(g['ticker'] for g in gainers)),
             'spy_selected_period':None}

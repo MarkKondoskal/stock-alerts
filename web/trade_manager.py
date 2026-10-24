@@ -67,7 +67,16 @@ def record_trade(source, incoming):
         else:item['reconstructed_open_cost_in_quote_currency']=float(round(new_q*new_avg,2))
         item['cost_currency']=currency
         item['source']='manual_trade_manager_estimated_cost_basis'
-    event_id=str(uuid.uuid4())
+    # Caller-provided UUID is used as an idempotency key for uncertain network responses.
+    client_id=incoming.get('client_trade_id')
+    if client_id is not None:
+        try: event_id=str(uuid.UUID(str(client_id)))
+        except (ValueError, TypeError, AttributeError):
+            raise ValueError('Invalid transaction request ID')
+        if any(t.get('event_id') == event_id for t in source.get('transactions', [])):
+            raise ValueError('This transaction was already recorded. Refresh trade history.')
+    else:
+        event_id=str(uuid.uuid4())
     if account=='us':
         event={'date':raw_date,'ticker':ticker,'action':action,'quantity':float(qty),'price_usd':float(px),
                'source':'manual_private_dashboard','verification':'user_reported','event_id':event_id}

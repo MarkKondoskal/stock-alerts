@@ -250,55 +250,74 @@ def _format_price_target(target):
     return f"${value}"
 
 
-def _make_embeds(rows, ticker_count):
-    """Build an aligned, monospaced table while keeping all tickers in one webhook post."""
-    headers = ["Ticker", "Price", "Targets", "PE", "FwdPE", "P/S", "Rev YoY"]
-    widths = [
-        max(len(headers[i]), *(len(str(row[i])) for row in rows))
-        for i in range(len(headers))
-    ]
+def _make_embeds(rows, ticker_count, target_details=None):
+    """Narrow one-line-per-ticker table, with full target details retained below.
 
-    def format_line(values):
-        return " | ".join(str(value).ljust(widths[i]) for i, value in enumerate(values)).rstrip()
+    Discord's monospaced code blocks wrap on narrow/mobile clients; limit the
+    width instead of relying on seven spacious, pipe-separated columns.
+    """
+    target_details = target_details or []
+    headers = ('Ticker', 'Price', 'Targets', 'P/E', 'FPE', 'P/S', 'YoY')
+    widths = (10, 8, 10, 6, 6, 6, 8)
 
-    header_line = format_line(headers)
-    separator_line = "-+-".join("-" * width for width in widths)
-    formatted_rows = [format_line(row) for row in rows]
-    prefix = ("**Watchlist · live prices, valuation & revenue growth**\n"
-              "PE = trailing P/E · FwdPE = forward P/E · Rev YoY = year-over-year revenue growth.\n\n")
+    def row_line(cells):
+        return ' '.join(str(cell)[:width].ljust(width) for cell, width in zip(cells, widths)).rstrip()
+
+    header = row_line(headers)
+    lines = [row_line(row) for row in rows]
     descriptions = []
-    current_rows = []
+    current = []
+    prefix = '**Watchlist · price, valuation and growth**\n' \
+             'FPE = forward P/E · YoY = revenue growth\n\n'
 
-    def build_table(table_rows):
-        lines = [header_line, separator_line, *table_rows]
-        return "```text\n" + "\n".join(lines) + "\n```"
+    def block(chunk):
+        return '```text\n' + '\n'.join([header, *chunk]) + '\n```'
 
-    # Keep a single table per embed; if Discord's description limit is reached,
-    # continuation embeds are attached to the same webhook message.
-    for line in formatted_rows:
-        candidate_rows = current_rows + [line]
-        candidate_prefix = prefix if not descriptions else ""
-        candidate = candidate_prefix + build_table(candidate_rows)
-        if current_rows and len(candidate) > DESCRIPTION_LIMIT:
-            descriptions.append((prefix if not descriptions else "") + build_table(current_rows))
-            current_rows = [line]
+    for line in lines:
+        candidate = current + [line]
+        proposed = (prefix if not descriptions else '') + block(candidate)
+        if current and len(proposed) > DESCRIPTION_LIMIT:
+            descriptions.append((prefix if not descriptions else '') + block(current))
+            current = [line]
         else:
-            current_rows = candidate_rows
+            current = candidate
+    if current or not descriptions:
+        descriptions.append((prefix if not descriptions else '') + block(current))
 
-    if current_rows or not descriptions:
-        descriptions.append((prefix if not descriptions else "") + build_table(current_rows))
+    # Full target rules are kept separate instead of widening every table row.
+    if target_details:
+        note = ''
+        for detail in target_details:
+            if note and len(note) + len(detail) + 1 > DESCRIPTION_LIMIT:
+                descriptions.append('**Complete target rules**\n' + note)
+                note = ''
+            note += detail + '\n'
+        if note:
+            descriptions.append('**Complete target rules**\n' + note)
 
-    embeds = []
-    for index, description in enumerate(descriptions):
-        title = "📋 Current Watchlist" if index == 0 else "📋 Current Watchlist (continued)"
-        embeds.append({
-            "title": title,
-            "description": description,
-            "color": 3447003,
-            "footer": {"text": f"{ticker_count} tickers monitored · Part {index + 1}/{len(descriptions)}"},
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
-    return embeds
+    # A Discord webhook may include at most 10 embeds. Beyond that, fail
+    # explicitly instead of posting a truncated/incomplete watchlist.
+    if len(descriptions) > 10:
+        raise ValueError('Watchlist exceeds Discord 10-embed limit; reduce entries or split the post')
+    return [{
+        'title': '📋 Current Watchlist' if i == 0 else '📋 Current Watchlist (continued)',
+        'description': description,
+        'color': 3447003,
+        'footer': {'text': f'{ticker_count} tickers · Part {i + 1}/{len(descriptions)}'},
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+    } for i, description in enumerate(descriptions)]
+
+
+def _compact_targets(targets, max_len=10):
+    """Table abbreviation; full target list is printed separately when needed."""
+    if not targets:
+        return '—'
+    joined = ','.join(targets)
+    if len(joined) <= max_len:
+        return joined
+    first = targets[0]
+    short = f'{first[:max_len-4]}+{len(targets)-1}'
+    return short[:max_len]
 
 
 def send_watchlist_to_discord():
@@ -312,6 +331,7 @@ def send_watchlist_to_discord():
         return False
 
     rows = []
+    details = []
     for ticker in sorted(data):
         entry = data[ticker]
         target_parts = [_format_price_target(target) for target in entry["price_targets"]]
@@ -332,9 +352,13 @@ def send_watchlist_to_discord():
             for metric in DISPLAY_METRICS
         ]
         growth_cell = f"{revenue_growth_pct:+.1f}%" if revenue_growth_pct is not None else "—"
-        rows.append([ticker, current_str, targets_str, *valuation_cells, growth_cell])
+        price_target_strings = [_format_price_target(x) for x in entry['price_targets']]
+        compact = _compact_targets(price_target_strings)
+        if len(targets_str) > 10 or any(entry['valuation_targets'].values()):
+            details.append(f'`{ticker}` · {targets_str}')
+        rows.append([ticker, current_str, compact, *valuation_cells, growth_cell])
 
-    payload = {"username": "Watchlist Bot", "embeds": _make_embeds(rows, len(data))}
+    payload = {"username": "Watchlist Bot", "embeds": _make_embeds(rows, len(data), details)}
     try:
         response = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=30)
         response.raise_for_status()

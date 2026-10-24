@@ -544,6 +544,8 @@ async function updatePerformance() {
             fullPeriodElement.hidden = false;
         }
         if (aligned.length < 2) {
+            const freshness = document.getElementById('publicDataFreshness');
+            if (freshness) freshness.textContent = `Holdings snapshots: ${freshness.dataset.positionsDate || 'not available'} · Performance history unavailable for this selection.`;
             if (analyticsCharts.performanceChart) analyticsCharts.performanceChart.destroy();
             delete analyticsCharts.performanceChart;
             for (const id of ["performanceReturn", "performanceDifference", "performancePortfolioPill", "performanceSpyPill"]) {
@@ -557,6 +559,13 @@ async function updatePerformance() {
         const sLast = Number(spy.get(aligned[aligned.length - 1].date));
         const comparisonStart = String(aligned[0].date).slice(0,10);
         const comparisonEnd = String(aligned[aligned.length - 1].date).slice(0,10);
+        const dataFreshness = document.getElementById('publicDataFreshness');
+        if (dataFreshness) {
+            dataFreshness.dataset.performanceDate = comparisonEnd;
+            const positionsDate = dataFreshness.dataset.positionsDate || 'not available';
+            const pending = positionsDate.split(' / ').some(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && d > comparisonEnd);
+            dataFreshness.textContent = `Holdings snapshots: ${positionsDate} · Performance through: ${comparisonEnd}.` + (pending ? ' Historical return update pending.' : ' Returns refresh after private recalculation.');
+        }
         const primary = document.getElementById("performanceReturn");
         primary.textContent = performancePct(pLast);
         applyPerformanceColor(primary, pLast);
@@ -654,6 +663,15 @@ async function loadFixedAllocation() {
         if (requestId === snapshotRequestId && account === selectedAccount && currencyAtRequest === selectedCurrency && etfsAtRequest === includeEtfs) {
             updateAllocation(info);
             setAccountStatus(`Showing ${ACCOUNT_LABELS[account]} holdings`);
+            const freshness = document.getElementById('publicDataFreshness');
+            if (freshness) {
+                const dates = Object.values(info.positions_as_of || {}).filter(Boolean);
+                const positionsDate = dates.length ? dates.map(d=>String(d).slice(0,10)).join(' / ') : 'not available';
+                freshness.dataset.positionsDate = positionsDate;
+                const performanceDate = freshness.dataset.performanceDate;
+                const pending = performanceDate && dates.some(d=>String(d).slice(0,10)>performanceDate);
+                freshness.textContent = `Holdings snapshots: ${positionsDate} · Performance through: ${performanceDate || 'loading…'}.` + (pending ? ' Historical return update pending.' : ' Individual trades remain private.');
+            }
         }
     } catch (error) {
         console.error("Could not load fixed allocation:", error);
