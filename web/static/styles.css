@@ -34,3 +34,6 @@
 .private-table-note{margin-top:15px;line-height:1.7}
 @media(max-width:900px){.private-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.private-chart-grid{grid-template-columns:1fr}}
 @media(max-width:500px){.private-controls{align-items:flex-start;flex-direction:column}.private-metrics{grid-template-columns:1fr 1fr;gap:8px}.private-metrics .metric{padding:12px}.private-metrics .metric strong{font-size:18px}.private-donut{height:255px}.private-performance-chart{height:260px}}
+
+/* Brand: use the same StockAlerts PWA artwork on private and public pages. */
+.brand .brand-logo{display:block;width:38px;height:38px;flex:0 0 38px;object-fit:cover;border-radius:10px;background:#111827;font-size:initial}

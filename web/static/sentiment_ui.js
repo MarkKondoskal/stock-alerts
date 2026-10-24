@@ -63,7 +63,7 @@
         ? `<a href="${row.source_url}" target="_blank" rel="noopener noreferrer">FRED ↗</a>` : 'FRED';
       return `<tr><td><span class="sentiment-item-label">${label}</span><span class="sentiment-item-sub">${escape(row.description || row.category)}${row.stale ? ' · cached reading' : ''}</span></td>
         <td class="sentiment-item-value">${value}<span class="sentiment-unit"> ${unit}</span></td><td class="sentiment-date">${escape(day(row.period))}</td><td class="sentiment-source">${source}</td></tr>`;
-    }).join('') : `<tr><td colspan="4" class="sentiment-empty">${reports.length ? 'No indicators in this category.' : 'No economic data available from FRED. Try again later.'}</td></tr>`;
+    }).join('') : `<tr><td colspan="4" class="sentiment-empty">${reports.length ? 'No indicators in this category.' : 'No verified economic data available. Configure FRED_API_KEY on Render and refresh.'}</td></tr>`;
   }
   function render(id, data) {
     const el = blocks(id);
@@ -90,7 +90,10 @@
     const timestamp = new Date(data.generated_at);
     const timeStr = Number.isNaN(timestamp.getTime()) ? '' : timestamp.toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'UTC'}) + ' UTC';
     const missing = [!data.vix ? 'VIX' : null, !data.fear_greed ? 'Fear & Greed' : null, !(data.reports || []).length ? 'economic data' : null].filter(Boolean);
-    const summary = missing.length ? `Some data unavailable (${missing.join(', ')}).` : 'Market data loaded.';
+    let summary = missing.length ? `Some data unavailable (${missing.join(', ')}).` : 'Market data loaded.';
+    if (data.economic_data_status === 'cached' || data.economic_data_status === 'partial') {
+      summary += ' Some economic readings are from the last confirmed bot report; YoY inflation and monthly payroll changes require a working FRED feed.';
+    }
     el.querySelector('.sentiment-update').textContent = `${summary}${timeStr ? ' Checked ' + timeStr + '.' : ''} Economic dates show reference periods, not publication dates.`;
   }
   async function load(id, force = false) {

@@ -53,7 +53,11 @@ class TestSentiment(unittest.TestCase):
 
     def test_provider_error_returns_unavailable_not_fake_value(self):
         from requests import Timeout
-        with patch.object(sd, '_fetch_vix', side_effect=Timeout('blocked')), patch.object(sd, '_fetch_fear_greed', side_effect=Timeout('blocked')), patch.object(sd,'_fred_points', side_effect=Timeout('blocked')):
+        with patch.dict(os.environ, {'FRED_API_KEY': ''}), \
+             patch.object(sd, '_fetch_vix', side_effect=Timeout('blocked')), \
+             patch.object(sd, '_fetch_fear_greed', side_effect=Timeout('blocked')), \
+             patch.object(sd, '_fred_bulk_csv', side_effect=Timeout('blocked')), \
+             patch.object(sd, '_economic_alert_fallback', return_value=[]):
             payload=sd.get_sentiment_dashboard()
         self.assertIsNone(payload['vix'])
         self.assertIsNone(payload['fear_greed'])

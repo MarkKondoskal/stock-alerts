@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0b0b0b">
-    <title>Public Portfolio Dashboard</title>
+    <title>StockAlerts — Public Dashboard</title>
     <link rel="stylesheet" href="/static/styles.css">
-    <link rel="stylesheet" href="/static/sentiment.css?v=sentiment-20261024-1">
+    <link rel="stylesheet" href="/static/sentiment.css?v=sentiment-macro-fix-20261024-2">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js" defer></script>
 
     <style>
@@ -26,6 +26,9 @@
             margin-bottom: 28px;
         }
 
+        .public-brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+        .public-brand-logo { width: 52px; height: 52px; object-fit: cover; border-radius: 13px; flex: 0 0 52px; }
+        @media (max-width: 520px) { .public-brand-logo { width: 43px; height: 43px; flex-basis: 43px; } }
         .public-header h1 {
             margin: 0 0 6px;
         }
@@ -332,10 +335,11 @@
 <body>
     <main class="public-dashboard">
         <header class="public-header">
-            <div>
-                <h1>Portfolio Dashboard</h1>
-                <div class="public-subtitle">
-                    Public view · Read-only
+            <div class="public-brand">
+                <img class="public-brand-logo" src="/static/pwa/icon-192.png" width="52" height="52" alt="StockAlerts logo">
+                <div>
+                    <h1>StockAlerts</h1>
+                    <div class="public-subtitle">Public view · Read-only</div>
                 </div>
             </div>
 
@@ -543,7 +547,7 @@
         </footer>
     </main>
 
-    <script src="/static/public.js?v=sentiment-20261024-1" defer></script>
-    <script src="/static/sentiment_ui.js?v=sentiment-20261024-1" defer></script>
+    <script src="/static/public.js?v=sentiment-macro-fix-20261024-2" defer></script>
+    <script src="/static/sentiment_ui.js?v=sentiment-macro-fix-20261024-2" defer></script>
 </body>
 </html>
