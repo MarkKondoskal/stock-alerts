@@ -150,12 +150,22 @@ def analytics(us,dk,account,period,read_csv):
         note='Combined historical return is not yet available: past US/DK invested account weights and currency conversions must be reconciled. No synthetic average is shown.'
     elif account=='us':
         text=read_csv('portfolio/performance/merrill_2026_ytd_provisional.csv')
-        performance=_select_period(_series(text,'portfolio_pct','spy_pct'),period)
-        note='Provisional US invested-securities return in USD. Verified history for this dataset starts December 31, 2025; excludes ADBE, cash, and dividends.'
+        # Use one shared, USD-denominated SPY history for all account views.
+        # Match benchmark and portfolio dates before period rebasing.
+        common_spy_text=read_csv('portfolio/performance/nordnet_all_available_provisional.csv')
+        common_spy={r['date']:_num(r.get('spy_usd_pct'))
+                    for r in csv.DictReader(io.StringIO(common_spy_text))}
+        rows=[]
+        for r in csv.DictReader(io.StringIO(text)):
+            day=r.get('date'); p=_num(r.get('portfolio_pct')); benchmark=common_spy.get(day)
+            if day and p is not None and benchmark is not None:
+                rows.append((day,p,benchmark))
+        performance=_select_period(sorted(rows),period)
+        note='Provisional US invested-securities return (USD) vs SPY (USD). Excludes ADBE, idle cash and dividends.'
     else:
         text=read_csv('portfolio/performance/nordnet_all_available_provisional.csv')
-        performance=_select_period(_series(text,'portfolio_pct','spy_dkk_pct'),period)
-        note='Provisional DK invested-securities return in DKK, compared with currency-matched SPY in DKK; excludes idle cash and dividends.'
+        performance=_select_period(_series(text,'portfolio_pct','spy_usd_pct'),period)
+        note='Provisional Nordnet invested-securities return (DKK) compared with SPY (USD). Currency effects are included in Nordnet returns but not the benchmark; excludes idle cash and dividends.'
     gainers=_cached(('gainers',account,period,tuple(sorted(p['ticker'] for p in positions))),
                     lambda:_gainers(positions,period),600)
     return {'period':period,'account':account,
