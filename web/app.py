@@ -714,6 +714,8 @@ def _private_csv(path):
         "portfolio/performance/merrill_2026_ytd_provisional.csv",
         "portfolio/performance/nordnet_all_available_provisional.csv",
         "portfolio/performance/combined_2026_ytd_provisional.csv",
+        "portfolio/performance/merrill_no_etf_2026_ytd_provisional.csv",
+        "portfolio/performance/combined_no_etf_2026_ytd_provisional.csv",
     ):
         raise ValueError("Unapproved private file path")
     response = requests.get(repo_url(path, data=True), headers=gh_headers(), timeout=20)
@@ -727,6 +729,9 @@ def public_analytics_get():
     account = request.args.get("account", "combined").lower()
     period = request.args.get("period", "1M").upper()
     currency = request.args.get("currency", "USD").upper()
+    include_etfs = request.args.get("etfs", "excluded").lower() == "included"
+    if request.args.get("etfs", "excluded").lower() not in ("included", "excluded"):
+        return jsonify({"error": "Invalid ETF mode."}), 400
     if currency not in ("USD", "DKK") or account not in ("combined", "us", "dk") or period not in (
         "1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "3Y", "ALL"
     ):
@@ -734,7 +739,7 @@ def public_analytics_get():
     try:
         from account_public import analytics
         us, dk = _account_documents()
-        response = jsonify(analytics(us, dk, account, period, _private_csv, currency=currency))
+        response = jsonify(analytics(us, dk, account, period, _private_csv, currency=currency, include_etfs=include_etfs))
         response.headers["Cache-Control"] = "public, max-age=60"
         return response
     except (requests.RequestException, RuntimeError, ValueError, TypeError,
@@ -747,12 +752,13 @@ def public_analytics_get():
 def public_analytics_snapshot_get():
     account = request.args.get("account", "combined").lower()
     currency = request.args.get("currency", "USD").upper()
-    if account not in ("combined", "us", "dk") or currency not in ("USD", "DKK"):
-        return jsonify({"error": "Invalid account or currency."}), 400
+    etf_mode = request.args.get("etfs", "excluded").lower()
+    if account not in ("combined", "us", "dk") or currency not in ("USD", "DKK") or etf_mode not in ("included", "excluded"):
+        return jsonify({"error": "Invalid account, currency or ETF mode."}), 400
     try:
         from account_public import snapshot
         us, dk = _account_documents()
-        response = jsonify(snapshot(us, dk, account, currency=currency))
+        response = jsonify(snapshot(us, dk, account, currency=currency, include_etfs=(etf_mode == "included")))
         response.headers["Cache-Control"] = "public, max-age=60"
         return response
     except (requests.RequestException, RuntimeError, ValueError, TypeError,

@@ -13,6 +13,8 @@ from datetime import date, datetime, timedelta, timezone
 from threading import Lock
 from public_analytics import SECTORS, _load_history
 
+ETF_TICKERS = frozenset({'VOO', 'IWM'})
+
 PERIODS = {'1D':1,'1W':7,'1M':30,'3M':90,'6M':183,'YTD':None,'1Y':365,'3Y':1096,'ALL':None}
 SECTORS.update({'VOO':'ETF / Broad Market','IWM':'ETF / Small Cap','MBGL':'Industrials',
                 'NBIS':'Technology','NOVO-B.CO':'Health Care','GOOGL':'Communication Services'})
@@ -35,7 +37,7 @@ def _num(value):
         return v if math.isfinite(v) else None
     except (ValueError,TypeError):return None
 
-def _positions(us,dk,account):
+def _positions(us,dk,account,include_etfs=True):
     positions=[]
     for key,document in [('us',us),('dk',dk)]:
         if account not in ('combined',key):continue
@@ -44,6 +46,7 @@ def _positions(us,dk,account):
             cost=_num(h.get('average_cost_per_share'))
             ticker=str(h.get('ticker','')).upper().strip()
             if not ticker or quantity is None or quantity<=0:continue
+            if not include_etfs and ticker in ETF_TICKERS:continue
             currency=str(h.get('cost_currency','USD' if key=='us' else 'DKK')).upper()
             positions.append({'ticker':ticker,'quantity':quantity,'cost':cost,
                               'currency':currency,'account':key,
@@ -61,8 +64,8 @@ def _quote_prices(tickers):
     fx=prices.get('DKK=X')
     return prices,fx
 
-def snapshot(us,dk,account,currency="USD"):
-    positions=_positions(us,dk,account)
+def snapshot(us,dk,account,currency="USD",include_etfs=False):
+    positions=_positions(us,dk,account,include_etfs)
     def build():
         prices,fx=_quote_prices({p['ticker'] for p in positions})
         holdings={}; missing=set(); sector_values=defaultdict(float)
@@ -108,8 +111,8 @@ def snapshot(us,dk,account,currency="USD"):
         result.sort(key=lambda x: (x['allocation_pct'] is None,-(x['allocation_pct'] or 0)))
         return {'holdings':result,'sectors':[{'sector':s,'allocation_pct':round(100*v/total,2)} for s,v in sorted(sector_values.items(),key=lambda x:-x[1])] if total else [],
                 'basis':'latest market value','missing_tickers':sorted(missing),
-                'as_of':datetime.now(timezone.utc).isoformat(), 'account':account,'currency':currency}
-    return _cached(('snapshot',account,currency,tuple(sorted((p['ticker'],p['quantity'],p['cost']) for p in positions))),build)
+                'as_of':datetime.now(timezone.utc).isoformat(), 'account':account,'currency':currency,'include_etfs':include_etfs}
+    return _cached(('snapshot',account,currency,include_etfs,tuple(sorted((p['ticker'],p['quantity'],p['cost']) for p in positions))),build)
 
 def _series(csv_text, portfolio_col, spy_col):
     result=[]
@@ -172,10 +175,10 @@ def _convert_series(rows, from_currency, to_currency, fx):
     return out
 
 
-def analytics(us,dk,account,period,read_csv,currency='USD'):
+def analytics(us,dk,account,period,read_csv,currency='USD',include_etfs=False):
     if period not in PERIODS or currency not in ('USD','DKK'):
         raise ValueError('Invalid analytics period or currency')
-    positions=_positions(us,dk,account)
+    positions=_positions(us,dk,account,include_etfs)
     nordnet_text=read_csv('portfolio/performance/nordnet_all_available_provisional.csv')
     nordnet=list(csv.DictReader(io.StringIO(nordnet_text)))
     benchmark={r['date']:_num(r.get('spy_usd_pct' if currency=='USD' else 'spy_dkk_pct')) for r in nordnet}
@@ -185,7 +188,7 @@ def analytics(us,dk,account,period,read_csv,currency='USD'):
         # Daily combined weights must be calculated from dated securities positions,
         # never averaged from two portfolio return percentages.
         try:
-            combined_text=read_csv('portfolio/performance/combined_2026_ytd_provisional.csv')
+            combined_text=read_csv('portfolio/performance/combined_2026_ytd_provisional.csv' if include_etfs else 'portfolio/performance/combined_no_etf_2026_ytd_provisional.csv')
             key='portfolio_usd_pct' if currency=='USD' else 'portfolio_dkk_pct'
             rows=[(r['date'],_num(r.get(key)),benchmark.get(r['date']))
                   for r in csv.DictReader(io.StringIO(combined_text))]
@@ -193,23 +196,28 @@ def analytics(us,dk,account,period,read_csv,currency='USD'):
             note='Provisional combined invested-securities return, weighted by each account’s historical market value, in '+currency+'. Excludes idle cash, ADBE and unrecorded dividends.'
         except (ValueError,KeyError,RuntimeError,OSError,requests.RequestException):
             rows=[]
-            note='Combined YTD will appear after running the private Combined Performance workflow and committing its output CSV. Older combined periods are not yet supported.'
+            note='This performance mode requires its private calculation workflow. Run ETF Performance Reconstruction and commit its output CSV. Older combined periods are not yet supported.'
     elif account=='us':
-        text=read_csv('portfolio/performance/merrill_2026_ytd_provisional.csv')
-        raw=[(r['date'],_num(r.get('portfolio_pct')),benchmark.get(r['date']))
-             for r in csv.DictReader(io.StringIO(text))]
-        raw=[r for r in raw if r[1] is not None and r[2] is not None]
-        rows=_convert_series(raw,'USD',currency,fx)
-        note=f'Provisional Merrill invested-securities return in {currency}, SPY in {currency}. Excludes ADBE, idle cash and dividends.'
+        try:
+            text=read_csv('portfolio/performance/merrill_2026_ytd_provisional.csv' if include_etfs else 'portfolio/performance/merrill_no_etf_2026_ytd_provisional.csv')
+            raw=[(r['date'],_num(r.get('portfolio_pct')),benchmark.get(r['date']))
+                 for r in csv.DictReader(io.StringIO(text))]
+            raw=[r for r in raw if r[1] is not None and r[2] is not None]
+            rows=_convert_series(raw,'USD',currency,fx)
+            note=f'Provisional Merrill invested-securities return in {currency}, SPY in {currency}. Excludes ADBE, idle cash and dividends.'
+        except (ValueError,KeyError,RuntimeError,OSError,requests.RequestException):
+            rows=[]
+            note='ETF-excluded historical returns are not published yet. Run ETF Excluded Performance Reconstruction in the private repository.'
     else:
         raw=[(r['date'],_num(r.get('portfolio_pct')),benchmark.get(r['date'])) for r in nordnet]
         raw=[r for r in raw if r[1] is not None and r[2] is not None]
         rows=_convert_series(raw,'DKK',currency,fx)
         note=f'Provisional Nordnet invested-securities return in {currency}, SPY in {currency}. Excludes idle cash and dividends.'
+    note += ' ETFs included.' if include_etfs else ' ETFs excluded.'
     performance=_select_period(sorted(rows),period)
-    gainers=_cached(('gainers',account,period,tuple(sorted(p['ticker'] for p in positions))),
+    gainers=_cached(('gainers',account,period,include_etfs,tuple(sorted(p['ticker'] for p in positions))),
                     lambda:_gainers(positions,period),600)
-    return {'period':period,'account':account,'currency':currency,
+    return {'period':period,'account':account,'currency':currency,'include_etfs':include_etfs,
             'performance':[{'date':p['date'],'value':p['portfolio']} for p in performance],
             'spy':[{'date':p['date'],'value':p['spy']} for p in performance],
             'gainers':gainers,'performance_note':note,

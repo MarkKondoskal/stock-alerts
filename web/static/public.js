@@ -456,6 +456,7 @@ const analyticsCharts = {};
 const analyticsRequests = new Map();
 let selectedAccount = "combined";
 let selectedCurrency = "USD";
+let includeEtfs = false; // Default: show stocks only
 const ACCOUNT_LABELS = { combined: "Combined", us: "US · Merrill", dk: "DK · Nordnet" };
 function setAccountStatus(message) {
     const status = document.getElementById("accountStatus");
@@ -484,9 +485,9 @@ function selector(id, periods, selected, callback) {
 }
 
 async function analyticsFor(period, account) {
-    const key = `${account}:${period}:${selectedCurrency}`;
+    const key = `${account}:${period}:${selectedCurrency}:${includeEtfs}`;
     if (!analyticsRequests.has(key)) {
-        const promise = fetchJson(`/api/public/analytics?account=${encodeURIComponent(account)}&period=${encodeURIComponent(period)}&currency=${selectedCurrency}`)
+        const promise = fetchJson(`/api/public/analytics?account=${encodeURIComponent(account)}&period=${encodeURIComponent(period)}&currency=${selectedCurrency}&etfs=${includeEtfs ? "included" : "excluded"}`)
             .catch(error => { analyticsRequests.delete(key); throw error; });
         analyticsRequests.set(key, promise);
     }
@@ -646,10 +647,11 @@ async function loadFixedAllocation() {
     const requestId = ++snapshotRequestId;
     const account = selectedAccount;
     const currencyAtRequest = selectedCurrency;
+    const etfsAtRequest = includeEtfs;
     try {
         // Dedicated current snapshot: never depend on chart period.
-        const info = await fetchJson(`${SNAPSHOT_API}?account=${encodeURIComponent(account)}&currency=${selectedCurrency}`);
-        if (requestId === snapshotRequestId && account === selectedAccount && currencyAtRequest === selectedCurrency) {
+        const info = await fetchJson(`${SNAPSHOT_API}?account=${encodeURIComponent(account)}&currency=${selectedCurrency}&etfs=${includeEtfs ? "included" : "excluded"}`);
+        if (requestId === snapshotRequestId && account === selectedAccount && currencyAtRequest === selectedCurrency && etfsAtRequest === includeEtfs) {
             updateAllocation(info);
             setAccountStatus(`Showing ${ACCOUNT_LABELS[account]} holdings`);
         }
@@ -706,6 +708,28 @@ function selectCurrency(currency) {
 for (const button of document.querySelectorAll('.currency-option')) {
     button.addEventListener('click', () => selectCurrency(button.dataset.currency));
 }
+function selectEtfs(value) {
+    if (!["included", "excluded"].includes(value)) return;
+    const next = value === "included";
+    if (next === includeEtfs) return;
+    includeEtfs = next;
+    accountGeneration++;
+    snapshotRequestId++;
+    analyticsRequests.clear();
+    for (const button of document.querySelectorAll(".etf-option")) {
+        const active = button.dataset.etfs === value;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", String(active));
+    }
+    setAccountStatus(`Loading ${ACCOUNT_LABELS[selectedAccount]} · ETFs ${value}…`);
+    loadFixedAllocation();
+    updatePerformance();
+    updateGainers();
+}
+for (const button of document.querySelectorAll(".etf-option")) {
+    button.addEventListener("click", () => selectEtfs(button.dataset.etfs));
+}
+
 function selectAccount(account) {
     if (!['combined', 'us', 'dk'].includes(account) || selectedAccount === account) return;
     selectedAccount = account;
