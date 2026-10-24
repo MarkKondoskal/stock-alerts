@@ -271,6 +271,9 @@
         .account-options { display:flex; gap:4px; padding:4px; border:1px solid #303030; background:#171717; border-radius:11px; flex-wrap:wrap; }
         .account-option { font:inherit; font-size:.86rem; color:#a1a1aa; border:0; background:transparent; padding:9px 15px; cursor:pointer; border-radius:8px; }
         .account-option.active { color:#fafafa; background:#363636; font-weight:600; }
+        .currency-option { font:inherit; font-size:.86rem; color:#a1a1aa; border:0; background:transparent; padding:9px 13px; cursor:pointer; border-radius:8px; }
+        .currency-option.active { color:#fafafa; background:#363636; font-weight:600; }
+        .currency-option:focus-visible { outline:2px solid white; outline-offset:2px; }
         .account-option:focus-visible { outline:2px solid white; outline-offset:2px; }
         .analytics-periods { display:flex; flex-wrap:wrap; gap:5px; }
         .analytics-period { cursor:pointer; border: 1px solid #333; background: #191919; color:#aaa; padding:7px 9px; border-radius:7px; font:inherit; font-size:.78rem; }
@@ -349,6 +352,11 @@
                 <button type="button" class="account-option active" data-account="combined" aria-pressed="true">Combined</button>
                 <button type="button" class="account-option" data-account="us" aria-pressed="false">US · Merrill</button>
                 <button type="button" class="account-option" data-account="dk" aria-pressed="false">DK · Nordnet</button>
+            </div>
+            <span class="public-muted currency-caption">Currency</span>
+            <div class="account-options currency-options" role="group" aria-label="Displayed currency">
+                <button type="button" class="currency-option active" data-currency="USD" aria-pressed="true">USD $</button>
+                <button type="button" class="currency-option" data-currency="DKK" aria-pressed="false">DKK kr</button>
             </div>
         </div>
         <p id="accountStatus" class="public-muted" role="status" aria-live="polite">Showing combined holdings</p>
@@ -514,6 +522,6 @@
         </footer>
     </main>
 
-    <script src="/static/public.js?v=20261024-spy-usd-clean" defer></script>
+    <script src="/static/public.js?v=combined-currency-fixed-20261024-2" defer></script>
 </body>
 </html>

@@ -713,6 +713,7 @@ def _private_csv(path):
     if path not in (
         "portfolio/performance/merrill_2026_ytd_provisional.csv",
         "portfolio/performance/nordnet_all_available_provisional.csv",
+        "portfolio/performance/combined_2026_ytd_provisional.csv",
     ):
         raise ValueError("Unapproved private file path")
     response = requests.get(repo_url(path, data=True), headers=gh_headers(), timeout=20)
@@ -725,14 +726,15 @@ def public_analytics_get():
     """Public analytics: never return private quantities, values, or transactions."""
     account = request.args.get("account", "combined").lower()
     period = request.args.get("period", "1M").upper()
-    if account not in ("combined", "us", "dk") or period not in (
+    currency = request.args.get("currency", "USD").upper()
+    if currency not in ("USD", "DKK") or account not in ("combined", "us", "dk") or period not in (
         "1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "3Y", "ALL"
     ):
         return jsonify({"error": "Invalid account or period."}), 400
     try:
         from account_public import analytics
         us, dk = _account_documents()
-        response = jsonify(analytics(us, dk, account, period, _private_csv))
+        response = jsonify(analytics(us, dk, account, period, _private_csv, currency=currency))
         response.headers["Cache-Control"] = "public, max-age=60"
         return response
     except (requests.RequestException, RuntimeError, ValueError, TypeError,
@@ -744,12 +746,13 @@ def public_analytics_get():
 @app.get("/api/public/analytics/snapshot")
 def public_analytics_snapshot_get():
     account = request.args.get("account", "combined").lower()
-    if account not in ("combined", "us", "dk"):
-        return jsonify({"error": "Invalid account."}), 400
+    currency = request.args.get("currency", "USD").upper()
+    if account not in ("combined", "us", "dk") or currency not in ("USD", "DKK"):
+        return jsonify({"error": "Invalid account or currency."}), 400
     try:
         from account_public import snapshot
         us, dk = _account_documents()
-        response = jsonify(snapshot(us, dk, account))
+        response = jsonify(snapshot(us, dk, account, currency=currency))
         response.headers["Cache-Control"] = "public, max-age=60"
         return response
     except (requests.RequestException, RuntimeError, ValueError, TypeError,

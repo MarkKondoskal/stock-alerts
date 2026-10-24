@@ -455,6 +455,7 @@ const GAINER_PERIODS = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y"];
 const analyticsCharts = {};
 const analyticsRequests = new Map();
 let selectedAccount = "combined";
+let selectedCurrency = "USD";
 const ACCOUNT_LABELS = { combined: "Combined", us: "US · Merrill", dk: "DK · Nordnet" };
 function setAccountStatus(message) {
     const status = document.getElementById("accountStatus");
@@ -483,9 +484,9 @@ function selector(id, periods, selected, callback) {
 }
 
 async function analyticsFor(period, account) {
-    const key = `${account}:${period}`;
+    const key = `${account}:${period}:${selectedCurrency}`;
     if (!analyticsRequests.has(key)) {
-        const promise = fetchJson(`/api/public/analytics?account=${encodeURIComponent(account)}&period=${encodeURIComponent(period)}`)
+        const promise = fetchJson(`/api/public/analytics?account=${encodeURIComponent(account)}&period=${encodeURIComponent(period)}&currency=${selectedCurrency}`)
             .catch(error => { analyticsRequests.delete(key); throw error; });
         analyticsRequests.set(key, promise);
     }
@@ -525,12 +526,13 @@ async function updatePerformance() {
     const period = performancePeriod;
     const account = selectedAccount;
     const generation = accountGeneration;
+    const currencyAtRequest = selectedCurrency;
     const note = document.getElementById("performanceNote");
     document.getElementById("performancePeriodLabel").textContent = period === "ALL" ? "All" : period;
     note.textContent = "Loading market history…";
     try {
         const info = await analyticsFor(period, account);
-        if (period !== performancePeriod || generation !== accountGeneration) return;
+        if (period !== performancePeriod || generation !== accountGeneration || currencyAtRequest !== selectedCurrency) return;
         const spy = new Map((info.spy || []).map(p => [p.date, p.value]));
         const aligned = (info.performance || []).filter(p => spy.has(p.date));
         const fullPeriodElement = document.getElementById("spyFullPeriod");
@@ -584,7 +586,7 @@ async function updatePerformance() {
                             label: c => `${c.dataset.label}: ${performancePct(c.parsed.y)}` } } } });
         note.textContent = `Matched comparison: ${comparisonStart} to ${comparisonEnd}. ${info.performance_note}`;
     } catch (error) {
-        if (period !== performancePeriod || generation !== accountGeneration) return;
+        if (period !== performancePeriod || generation !== accountGeneration || currencyAtRequest !== selectedCurrency) return;
         note.textContent = `Performance unavailable: ${error.message}`;
     }
 }
@@ -614,11 +616,12 @@ async function updateGainers() {
     const period = gainerPeriod;
     const account = selectedAccount;
     const generation = accountGeneration;
+    const currencyAtRequest = selectedCurrency;
     const note = document.getElementById("gainerNote");
     note.textContent = "Loading stock returns…";
     try {
         const info = await analyticsFor(period, account);
-        if (period !== gainerPeriod || generation !== accountGeneration) return;
+        if (period !== gainerPeriod || generation !== accountGeneration || currencyAtRequest !== selectedCurrency) return;
         const sorted = [...info.gainers].sort((a, b) => b.return_pct - a.return_pct);
         if (!sorted.length) { note.textContent = "No price history available for the selected period."; return; }
         const shown = [...sorted.slice(0, 5), ...sorted.slice(-5).filter(x => !sorted.slice(0, 5).some(y => y.ticker === x.ticker))];
@@ -633,7 +636,7 @@ async function updateGainers() {
                         y: { ticks: { color: "#bbb" }, grid: { display: false } } } });
         note.textContent = `Top and bottom performers by share-price return (${period}). ${info.missing_tickers?.length ? "Missing prices: " + info.missing_tickers.join(", ") + "." : ""}`;
     } catch (error) {
-        if (generation !== accountGeneration) return;
+        if (generation !== accountGeneration || currencyAtRequest !== selectedCurrency) return;
         note.textContent = `Gainers/losers unavailable: ${error.message}`;
     }
 }
@@ -642,10 +645,11 @@ let snapshotRequestId = 0;
 async function loadFixedAllocation() {
     const requestId = ++snapshotRequestId;
     const account = selectedAccount;
+    const currencyAtRequest = selectedCurrency;
     try {
         // Dedicated current snapshot: never depend on chart period.
-        const info = await fetchJson(`${SNAPSHOT_API}?account=${encodeURIComponent(account)}`);
-        if (requestId === snapshotRequestId && account === selectedAccount) {
+        const info = await fetchJson(`${SNAPSHOT_API}?account=${encodeURIComponent(account)}&currency=${selectedCurrency}`);
+        if (requestId === snapshotRequestId && account === selectedAccount && currencyAtRequest === selectedCurrency) {
             updateAllocation(info);
             setAccountStatus(`Showing ${ACCOUNT_LABELS[account]} holdings`);
         }
@@ -683,6 +687,25 @@ elements.refreshButton.addEventListener("click", () => {
     updateGainers();
 });
 
+function selectCurrency(currency) {
+    if (!['USD','DKK'].includes(currency) || currency === selectedCurrency) return;
+    selectedCurrency = currency;
+    accountGeneration++;
+    snapshotRequestId++;
+    analyticsRequests.clear();
+    for (const button of document.querySelectorAll('.currency-option')) {
+        const active = button.dataset.currency === currency;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', String(active));
+    }
+    setAccountStatus(`Displaying ${ACCOUNT_LABELS[selectedAccount]} in ${currency}…`);
+    loadFixedAllocation();
+    updatePerformance();
+    updateGainers();
+}
+for (const button of document.querySelectorAll('.currency-option')) {
+    button.addEventListener('click', () => selectCurrency(button.dataset.currency));
+}
 function selectAccount(account) {
     if (!['combined', 'us', 'dk'].includes(account) || selectedAccount === account) return;
     selectedAccount = account;
