@@ -803,6 +803,56 @@ def public_workflows_get():
 
 
 
+
+
+@app.get('/api/private/accounts')
+def private_accounts():
+    err=require_auth()
+    if err:return err
+    try:
+        from trade_manager import FILES
+        result={}
+        for account,path in FILES.items():
+            data,_=get_file(path,data=True)
+            result[account]={'positions_as_of':data.get('positions_as_of'),
+                             'positions':[{'ticker':p['ticker'],'quantity':p['quantity'],
+                                           'average_cost_per_share':p.get('average_cost_per_share'),
+                                           'cost_currency':p.get('cost_currency')} for p in data.get('positions',[])]}
+        return jsonify(result)
+    except Exception:
+        app.logger.exception('Private accounts query failed')
+        return jsonify({'error':'Could not load private accounts'}),502
+
+@app.post('/api/private/trades')
+def private_trade_add():
+    err=require_auth()
+    if err:return err
+    if not request.is_json:return jsonify({'error':'Expected JSON request'}),400
+    body=request.get_json(silent=True)
+    try:
+        from trade_manager import FILES,record_trade
+        if not isinstance(body,dict) or body.get('account') not in FILES:
+            return jsonify({'error':'Select an account'}),400
+        path=FILES[body['account']]
+        # Read SHA once; writing with this SAME SHA rejects concurrent changes (HTTP 409).
+        source,sha=get_file(path,data=True)
+        data,event=record_trade(source,body)
+        _,branch=repository_and_branch(data=True)
+        encoded=base64.b64encode((json.dumps(data,indent=2,ensure_ascii=False)+'\n').encode()).decode()
+        response=requests.put(repo_url(path,data=True),headers=gh_headers(),timeout=25,
+                              json={'message':f"Record {event['action']} {event['ticker']} ({body['account']})",
+                                    'content':encoded,'sha':sha,'branch':branch})
+        if response.status_code in (409,422):
+            return jsonify({'error':'Account changed while saving. Refresh and retry; do not double-submit.'}),409
+        response.raise_for_status()
+        return jsonify({'ok':True,'event_id':event['event_id'],
+                        'message':'Trade recorded in private account ledger. Returns update in the next calculation run.'})
+    except ValueError as exc:
+        return jsonify({'error':str(exc)}),400
+    except Exception:
+        app.logger.exception('Private trade save failed')
+        return jsonify({'error':'Could not save the trade in GitHub. Check server logs.'}),502
+
 if __name__ == "__main__":
     # Local development only. Use Gunicorn for deployment.
     app.run(
