@@ -1,10 +1,4 @@
 {
-  "GOOG": {
-    "price_targets": [
-      300.0
-    ],
-    "valuation_targets": {}
-  },
   "CRDO": {
     "price_targets": [
       130.0,
