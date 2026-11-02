@@ -1,8 +1,7 @@
 {
   "CRDO": {
     "price_targets": [
-      130.0,
-      140.0
+      130.0
     ],
     "valuation_targets": {}
   },
@@ -51,12 +50,6 @@
   "AAOI": {
     "price_targets": [
       45.0
-    ],
-    "valuation_targets": {}
-  },
-  "MRVL": {
-    "price_targets": [
-      170.0
     ],
     "valuation_targets": {}
   },
