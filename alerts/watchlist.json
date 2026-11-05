@@ -1,10 +1,4 @@
 {
-  "CRDO": {
-    "price_targets": [
-      130.0
-    ],
-    "valuation_targets": {}
-  },
   "META": {
     "price_targets": [
       525.0
@@ -53,13 +47,6 @@
     ],
     "valuation_targets": {}
   },
-  "BE": {
-    "price_targets": [
-      170.0,
-      180.0
-    ],
-    "valuation_targets": {}
-  },
   "SAAB-B.ST": {
     "price_targets": [
       525.0
@@ -102,12 +89,6 @@
     ],
     "valuation_targets": {}
   },
-  "RHM.DE": {
-    "price_targets": [
-      900.0
-    ],
-    "valuation_targets": {}
-  },
   "ASTOR.NGM": {
     "price_targets": [
       10.0
@@ -123,13 +104,6 @@
   "ROL": {
     "price_targets": [
       29.0
-    ],
-    "valuation_targets": {}
-  },
-  "AVGO": {
-    "price_targets": [
-      310.0,
-      315.0
     ],
     "valuation_targets": {}
   },
