@@ -20,6 +20,9 @@ class TradeJournalTest(unittest.TestCase):
         second = dict(ticker='XYZ', date='2026-10-21', action='SELL', event_id='private-id',
                       journal={'note': 'Private note', 'published': False})
         account = {'transactions': [first, second]}
+        public_first = {'date': '2026-10-20', 'ticker': 'ABC', 'action': 'BUY', 'note': ''}
+        public_second = {'date': '2026-10-21', 'ticker': 'XYZ', 'action': 'SELL', 'note': ''}
+        default_activity = {'trades': [public_second, public_first]}
         key = next(journal_trades(account))[0]
         body = {'account': 'us', 'trade_id': key, 'note': 'Thesis intact.', 'published': True}
         headers = {'Authorization': 'Bearer secret'}
@@ -29,7 +32,7 @@ class TradeJournalTest(unittest.TestCase):
              patch('app._account_documents', return_value=(account, {})), patch('app.requests.put') as put:
             client = app.test_client()
             self.assertEqual(client.patch('/api/private/trades/journal', json=body).status_code, 401)
-            self.assertEqual(client.get('/api/public/trade-activity').json, {'trades': []})
+            self.assertEqual(client.get('/api/public/trade-activity').json, default_activity)
             put.return_value.status_code = 200
             self.assertEqual(client.patch('/api/private/trades/journal', json=body, headers=headers).status_code, 200)
             write = put.call_args.kwargs['json']
@@ -37,11 +40,10 @@ class TradeJournalTest(unittest.TestCase):
             self.assertEqual(json.loads(base64.b64decode(write['content']))['transactions'][0]['quantity'], 7)
             response = client.get('/api/public/trade-activity')
             self.assertEqual(response.headers['Cache-Control'], 'no-store')
-            self.assertEqual(response.json, {'trades': [{'date': '2026-10-20', 'ticker': 'ABC',
-                                                          'action': 'BUY', 'note': 'Thesis intact.'}]})
+            self.assertEqual(response.json, {'trades': [public_second, {**public_first, 'note': 'Thesis intact.'}]})
             self.assertEqual(next(journal_trades(account))[0], key)
             client.patch('/api/private/trades/journal', json={**body, 'published': False}, headers=headers)
-            self.assertEqual(client.get('/api/public/trade-activity').json, {'trades': []})
+            self.assertEqual(client.get('/api/public/trade-activity').json, default_activity)
 
     def test_realized_summary_respects_currency_and_scope(self):
         us = {'transactions': [dict(action='SELL', ticker='ABC', realized_gain_in_quote_currency=20),

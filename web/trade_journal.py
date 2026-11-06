@@ -32,7 +32,7 @@ def public_activity(documents):
         for _, trade in journal_trades(document):
             journal = trade.get('journal', {})
             share_note = journal.get('published') is True
-            if trade['action'] not in ('BUY', 'SELL') or not (trade.get('activity_public') is True or share_note):
+            if trade['action'] not in ('BUY', 'SELL'):
                 continue
             rows.append({'date': trade.get('date') or trade.get('trade_date'),
                          'ticker': trade['ticker'], 'action': trade['action'],

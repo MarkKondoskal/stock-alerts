@@ -112,11 +112,12 @@ function tradeNoteEditor(trade){
   publish.type='checkbox';
   publish.checked=trade.published;
   publish.disabled=trade.action==='SPLIT';
-  label.append(publish,trade.activity_public?' Share this note on the public site':' Share on the public site');
+  label.append(publish,' Share this note on the public site');
+  label.hidden=!trade.activity_public;
   const help=document.createElement('small');
   help.textContent=trade.activity_public
     ? 'This trade’s date, ticker and side are already public. Keep account details and amounts out of any note you share.'
-    : 'Sharing posts the date, ticker, side and your note. Keep account details and amounts out of any note you share.';
+    : 'Split notes stay private.';
   const save=document.createElement('button');
   save.type='button';
   save.className='ghost';
@@ -129,7 +130,7 @@ function tradeNoteEditor(trade){
   };
   updateLabel();
   save.onclick=async()=>{
-    if(publish.checked&&!confirm(trade.activity_public?'Publish this note for anyone to read?':'Publish this trade’s date, ticker, side and note for anyone to read?'))return;
+    if(publish.checked&&!confirm('Publish this note for anyone to read?'))return;
     save.disabled=true;
     try{
       const result=await api('/api/private/trades/journal',{method:'PATCH',body:JSON.stringify({

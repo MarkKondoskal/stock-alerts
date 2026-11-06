@@ -33,7 +33,7 @@
   const local = stamp => stamp ? new Date(stamp).toLocaleString() : 'Unavailable';
   window.loadPublicTradeActivity = async () => {
     const node = document.getElementById('public-trade-activity');
-    node.replaceChildren(element('p', 'Loading shared activity…'));
+    node.replaceChildren(element('p', 'Loading trade activity…'));
     try {
       const response = await fetch('/api/public/trade-activity', {cache: 'no-store'});
       if (!response.ok) throw new Error('Trade activity temporarily unavailable.');
@@ -42,7 +42,7 @@
         ? table(['Date', 'Ticker', 'Side', 'Note'], trades.map(trade => [
             trade.date, trade.ticker, trade.action, element('span', trade.note || '—'),
           ]))
-        : element('p', 'No trades have been shared yet.'));
+        : element('p', 'No buys or sells are available.'));
     } catch {
       node.replaceChildren(element('p', 'Trade activity temporarily unavailable.'));
     }

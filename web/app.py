@@ -903,7 +903,7 @@ def private_trade_history():
                     'trade_id':trade_id,
                     'note':journal.get('note', ''),
                     'published':journal.get('published') is True,
-                    'activity_public':t.get('activity_public') is True and t['action'] in ('BUY', 'SELL'),
+                    'activity_public':t['action'] in ('BUY', 'SELL'),
                     'event_id':t.get('event_id'),
                     'account':account,
                     'action':t.get('action'),
