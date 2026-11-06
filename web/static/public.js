@@ -137,13 +137,13 @@ function activateTab(tabName, moveFocus = false) {
         if (active && moveFocus) button.focus();
     }
     const controls = document.querySelector('.account-switcher');
-    if (controls) controls.hidden = tabName === 'sentiment';
+    if (controls) controls.hidden = tabName === 'watchlist' || tabName === 'sentiment';
     document.querySelectorAll('[data-holdings-control]').forEach(item => {
         item.hidden = tabName === 'activity';
     });
     for (const id of ['accountStatus', 'publicDataFreshness']) {
         const item = document.getElementById(id);
-        if (item) item.hidden = ['sentiment', 'activity'].includes(tabName);
+        if (item) item.hidden = tabName !== 'holdings';
     }
     if (tabName === 'sentiment') window.StockSentiment?.load('public');
     if (tabName === 'activity') window.loadPublicTradeActivity(selectedAccount);
