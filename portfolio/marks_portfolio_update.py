@@ -13,7 +13,7 @@ import yfinance as yf
 
 WEBHOOK_URL = os.environ.get("DISCORD_PORTFOLIO_WEBHOOK")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PORTFOLIO_FILE = os.getenv("LEGACY_PORTFOLIO_FILE") or os.path.join(BASE_DIR, "marks_portfolio.json")
+PORTFOLIO_FILE = os.getenv("LEGACY_PORTFOLIO_FILE")
 CHART_FILE = os.path.join(BASE_DIR, "portfolio_chart.png")
 
 
@@ -34,11 +34,12 @@ def get_current_price(ticker: str) -> float:
 # -----------------------------------------------------------------------------
 
 def load_portfolio():
-    try:
-        with open(PORTFOLIO_FILE, "r") as f:
-            data = json.load(f)
-    except FileNotFoundError:
-        data = {}
+    if not PORTFOLIO_FILE:
+        raise RuntimeError("Set LEGACY_PORTFOLIO_FILE to the private portfolio file.")
+    with open(PORTFOLIO_FILE, encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError("The legacy portfolio must be a JSON object.")
 
     data.setdefault("closed_positions", [])
 

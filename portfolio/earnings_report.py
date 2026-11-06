@@ -24,7 +24,7 @@ except ImportError as e:
 
 WEBHOOK_URL = os.environ.get("DISCORD_PORTFOLIO_WEBHOOK")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PORTFOLIO_FILE = os.getenv("LEGACY_PORTFOLIO_FILE") or os.path.join(BASE_DIR, "marks_portfolio.json")
+PORTFOLIO_FILE = os.getenv("LEGACY_PORTFOLIO_FILE")
 # Remembers which earnings were already posted so the hourly schedule doesn't repeat them.
 STATE_FILE = os.path.join(BASE_DIR, "earnings_state.json")
 
@@ -66,12 +66,14 @@ def safe_float(value, default=None):
         return default
 
 def load_portfolio():
-    try:
-        with open(PORTFOLIO_FILE, "r") as f:
-            data = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        print(f"❌ Failed to load portfolio: {e}", flush=True)
-        return {}
+    if not PORTFOLIO_FILE:
+        raise RuntimeError("Set LEGACY_PORTFOLIO_FILE to the private portfolio file.")
+    with open(PORTFOLIO_FILE, encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError("The legacy portfolio must be a JSON object.")
+
+    return {}
 
     return {
         ticker: value

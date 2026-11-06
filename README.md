@@ -84,6 +84,10 @@ The Watchlist Manager and stock checker commit changes to the private watchlist.
 
 Workflow definitions are in `.github/workflows/`. Open the **Actions** tab to see each workflow and its schedule. The stock alert pipeline checks active price and valuation targets; the watchlist manager adds/removes targets and publishes the Discord table. Other workflows handle the project's earnings, economic, sentiment, heartbeat, and portfolio reporting tasks.
 
+## Legacy Discord portfolio and earnings workflows
+
+The Marks Portfolio Manager and Portfolio Earnings Report use the private data repository's portfolio/marks_portfolio.json. GitHub Actions provides the path through LEGACY_PORTFOLIO_FILE. For a local run, set that variable to your private checkout's portfolio file. Keep the portfolio file tracked in the private repository only.
+
 ## Local testing
 
 Install Python 3.11 and dependencies:
