@@ -890,11 +890,14 @@ def private_trade_history():
     try:
         from trade_manager import FILES
         from trade_journal import journal_trades
+        from realized_pl import trade_gains
         offset = max(0, request.args.get('offset', 0, type=int))
         events=[]
         for account,path in FILES.items():
             data,_=get_file(path,data=True)
+            gains = {id(t): (gain, currency) for t, gain, currency in trade_gains(account, data)}
             for trade_id, t in journal_trades(data):
+                realized, realized_currency = gains.get(id(t), (None, None))
                 journal = t.get('journal', {})
                 events.append({
                     'trade_id':trade_id,
@@ -914,7 +917,8 @@ def private_trade_history():
                     'fee_currency':t.get('fee_currency'),
                     'fee_exchange_rate':t.get('fee_exchange_rate'),
                     'broker_reference':t.get('broker_reference'),
-                    'realized':t.get('realized_gain_in_quote_currency'),
+                    'realized':realized,
+                    'realized_currency':realized_currency,
                     'split_ratio':t.get('split_ratio'),
                     'correctable':'request' in t,
                 })

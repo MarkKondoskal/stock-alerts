@@ -9,7 +9,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'web'))
 
 from app import app
-from private_holdings import realized_summary
+from private_holdings import private_snapshot, realized_summary
 from trade_journal import journal_trades, public_activity
 from trade_manager import record_trade
 
@@ -73,3 +73,22 @@ class TradeJournalTest(unittest.TestCase):
         with response:
             self.assertEqual(response.headers['Cache-Control'], 'no-store')
             self.assertIn('id="private-realized"', response.get_data(as_text=True))
+
+    def test_nordnet_cash_basis_realized_and_total(self):
+        def trade(day, action, qty, cash):
+            return dict(trade_date=day, action=action, ticker='ABC', quantity=qty,
+                        net_cash_movement_dkk=cash, price_currency='DKK')
+        dk = {'transactions': [
+            trade('2025-01-01', 'BUY', 5, -100),
+            trade('2025-01-02', 'SELL', 5, 130),
+            trade('2025-01-03', 'BUY', 2, -40),
+        ], 'positions': [{'ticker': 'ABC', 'quantity': 2,
+                          'average_cost_per_share': 20, 'cost_currency': 'DKK'}]}
+        with patch('private_holdings._quote_prices', return_value=({'ABC': 10}, 6.5)):
+            result = private_snapshot({}, dk, 'dk', 'DKK')
+        self.assertEqual(result['realized'], {'amount': 30, 'included': 1, 'missing': 0})
+        self.assertEqual(result['total_pl'], result['unrealized_pl'] + 30)
+        self.assertFalse(result['total_pl_partial'])
+        dk['transactions'][0]['net_cash_movement_dkk'] = None
+        self.assertEqual(realized_summary((('dk', dk),), 'dk', 'DKK', True, 6.5),
+                         {'amount': None, 'included': 0, 'missing': 1})

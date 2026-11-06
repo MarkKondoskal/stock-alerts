@@ -13,7 +13,7 @@
 .private-segment .private-filter{background:transparent;border:0;border-radius:7px;color:#a1a1aa;font-size:12px;padding:8px 11px;white-space:nowrap}
 .private-segment .private-filter.active{color:#fff;background:#3b3b43;box-shadow:0 1px 3px #0007}
 .private-freshness{margin-bottom:19px;line-height:1.7}
-.private-metrics{grid-template-columns:repeat(4,minmax(0,1fr))}
+.private-metrics{grid-template-columns:repeat(5,minmax(0,1fr))}
 .private-metrics .metric strong{font-size:23px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 .private-positive{color:#2dd4bf!important}.private-negative{color:#fb7185!important}
 .private-panel-head{align-items:center;flex-wrap:wrap}

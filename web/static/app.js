@@ -78,7 +78,7 @@ async function loadTradeHistory(offset=0){
     const row=tbody.insertRow();
     for(const value of [t.date,t.account==='us'?'Merrill':'Nordnet',t.action,t.ticker,
       t.split_ratio ?? t.quantity,t.action==='SPLIT'?'—':t.currency+' '+fmt(t.price),
-      t.fee==null?'—':t.currency+' '+fmt(t.fee),t.realized==null?'—':t.currency+' '+fmt(t.realized)]){
+      t.fee==null?'—':t.currency+' '+fmt(t.fee),t.realized==null?'—':(t.realized_currency||t.currency)+' '+fmt(t.realized)]){
       row.insertCell().textContent=value;
     }
     row.insertCell().append(tradeNoteEditor(t));

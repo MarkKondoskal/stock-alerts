@@ -7,7 +7,8 @@ no cash, fees, accrued dividends or broker-reported realized P/L are included.
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from account_public import ETF_TICKERS, _num, _positions, _quote_prices
+from account_public import ETF_TICKERS, _positions, _quote_prices
+from realized_pl import trade_gains
 
 
 def realized_summary(documents, account, currency, include_etfs, fx):
@@ -15,18 +16,16 @@ def realized_summary(documents, account, currency, include_etfs, fx):
     for key, document in documents:
         if account not in ('combined', key):
             continue
-        for trade in document.get('transactions', []):
-            if trade.get('action') != 'SELL' or (not include_etfs and trade.get('ticker') in ETF_TICKERS):
+        for trade, gain, quote in trade_gains(key, document):
+            if not include_etfs and trade.get('ticker') in ETF_TICKERS:
                 continue
-            gain = _num(trade.get('realized_gain_in_quote_currency'))
-            quote = 'USD' if key == 'us' else trade.get('price_currency')
             if gain is None or quote not in ('USD', 'DKK') or (quote != currency and not fx):
                 missing += 1
                 continue
             rate = 1 if quote == currency else fx if currency == 'DKK' else 1 / fx
             total += gain * rate
             included += 1
-    return {'amount': round(total, 2) if included else None, 'included': included, 'missing': missing}
+    return {'amount': round(total, 2) if included or not missing else None, 'included': included, 'missing': missing}
 
 
 def private_snapshot(us, dk, account='combined', currency='USD', include_etfs=False):
@@ -99,14 +98,21 @@ def private_snapshot(us, dk, account='combined', currency='USD', include_etfs=Fa
             sectors[r['sector']] += value
     holdings.sort(key=lambda r: (r['market_value'] is None, -(r['market_value'] or 0), r['ticker']))
 
+    unrealized = round(known_market - known_cost, 2) if complete_cost and complete_prices else None
+    realized = realized_summary((('us', us), ('dk', dk)), account, currency, include_etfs, fx)
+    known_components = [value for value in (unrealized, realized['amount']) if value is not None]
+    total_pl = round(sum(known_components), 2) if known_components else None
+
     return {
         'account': account, 'currency': currency, 'include_etfs': include_etfs,
         'holdings': holdings,
         'position_count': len(positions), 'ticker_count': len(rows),
         'market_value': round(total_value, 2),
-        'realized': realized_summary((('us', us), ('dk', dk)), account, currency, include_etfs, fx),
+        'realized': realized,
+        'total_pl': total_pl,
+        'total_pl_partial': unrealized is None or bool(realized['missing']),
         'cost_basis': round(known_cost, 2) if complete_cost and complete_prices else None,
-        'unrealized_pl': round(known_market - known_cost, 2) if complete_cost and complete_prices else None,
+        'unrealized_pl': unrealized,
         'unrealized_pl_pct': round(100 * (known_market - known_cost) / known_cost, 2)
                              if complete_cost and complete_prices and known_cost > 0 else None,
         'sectors': [{'sector': name, 'market_value': round(value, 2),

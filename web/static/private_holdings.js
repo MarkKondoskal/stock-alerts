@@ -57,7 +57,7 @@ function privateRenderRealized(realized){
         privateColor(value,realized?.amount);
     }
     if(note){
-        const recorded=realized?.included?'Recorded sales · current FX':'No recorded realized amounts';
+        const recorded=realized?.included?'Closed trades · current FX':realized?.amount===0?'No sales in this selection':'Realized amounts unavailable';
         note.textContent=recorded+(realized?.missing?' · '+realized.missing+' without figures':'');
     }
 }
@@ -68,6 +68,9 @@ function privateRenderSnapshot(s){
     privateColor(document.getElementById('private-unrealized'),s.unrealized_pl);
     privateSet('private-unrealized-pct',`${privatePercent(s.unrealized_pl_pct)} on open positions · not realized`);
     privateRenderRealized(s.realized);
+    privateSet('private-total-pl',privateSignedMoney(s.total_pl));
+    privateColor(document.getElementById('private-total-pl'),s.total_pl);
+    privateSet('private-total-pl-note',s.total_pl_partial?'Partial total · some amounts unavailable':'Realized + unrealized');
     const dates=Object.entries(s.positions_as_of||{}).map(([account,day])=>`${privateLabel[account]} ${day||'unknown'}`).join(' · ');
     privateSet('private-freshness',`${dates||'Account dates unavailable'} · Latest available closes · ${s.currency} · ETFs ${s.include_etfs?'included':'excluded'}`);
     const rows=(s.holdings||[]).map(h=>{
@@ -97,8 +100,9 @@ async function privateLoadSnapshot(version){
     }catch(error){if(version!==privateHoldingsState.version)return;
         privateSet('private-freshness','Private holdings unavailable: '+error.message);
         document.getElementById('private-holdings-rows').innerHTML='<tr><td colspan="11">Could not fetch current account positions or prices. Try Refresh holdings.</td></tr>';
-        for(const id of ['private-market-value','private-cost-basis','private-unrealized'])privateSet(id,'—');
+        for(const id of ['private-market-value','private-cost-basis','private-unrealized','private-total-pl'])privateSet(id,'—');
         privateRenderRealized();
+        privateSet('private-total-pl-note','Realized + unrealized');
         for(const id of ['private-holdings-chart','private-sector-chart'])privateEmptyChart(id);
     }
 }
