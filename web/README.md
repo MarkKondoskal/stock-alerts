@@ -1,6 +1,6 @@
 # StockAlerts Core web dashboard
 
-This folder adds a small web UI to the existing `stock-alerts-main` repository. The Python alert scripts and scheduled GitHub Actions remain the source of truth. The dashboard reads/writes the real `alerts/watchlist.json` and reads the real `portfolio/marks_portfolio.json` and GitHub Actions run history.
+The StockAlerts web app serves the private and public dashboards. Both read the private data repository. The authenticated editor, stock checker and GitHub Watchlist Manager share the private alerts/watchlist.json file.
 
 ## Current capabilities
 

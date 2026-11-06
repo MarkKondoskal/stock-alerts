@@ -22,7 +22,7 @@ if git diff --cached --quiet; then
 fi
 git commit -m "$message"
 
-branch="${GITHUB_REF_NAME:-main}"
+branch="${STOCKALERTS_PUSH_BRANCH:-${GITHUB_REF_NAME:-main}}"
 for attempt in 1 2 3 4 5; do
   if git pull --rebase origin "$branch" && git push origin "HEAD:$branch"; then
     echo "Pushed on attempt $attempt."

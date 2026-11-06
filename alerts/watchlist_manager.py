@@ -8,7 +8,7 @@ from pathlib import Path
 import requests
 import yfinance as yf
 
-WATCHLIST_FILE = Path(__file__).parent / "watchlist.json"
+WATCHLIST_FILE = Path(os.environ["STOCKALERTS_WATCHLIST_FILE"]) if os.environ.get("STOCKALERTS_WATCHLIST_FILE") else Path(__file__).with_name("watchlist.json")
 DISCORD_WEBHOOK_URL = (
     os.environ.get("DISCORD_WATCHLIST_WEBHOOK")
     or os.environ.get("DISCORD_STOCK_WEBHOOK")

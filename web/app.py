@@ -137,19 +137,10 @@ def get_file(path, data=False):
     return json.loads(raw), payload["sha"]
 
 
-def put_file(path, content, message, data=False):
-    """Update an existing JSON file and commit it to the selected repository."""
+def put_file(path, content, message, sha, data=False):
+    """Commit an update against the file revision the editor loaded."""
     _, branch = repository_and_branch(data=data)
     url = repo_url(path, data=data)
-
-    # GitHub requires the current SHA when updating an existing file.
-    current_response = requests.get(
-        url,
-        headers=gh_headers(),
-        timeout=20,
-    )
-    current_response.raise_for_status()
-    current_file = current_response.json()
 
     raw = json.dumps(content, indent=2, ensure_ascii=False) + "\n"
     encoded = base64.b64encode(raw.encode("utf-8")).decode("utf-8")
@@ -157,7 +148,7 @@ def put_file(path, content, message, data=False):
     payload = {
         "message": message,
         "content": encoded,
-        "sha": current_file["sha"],
+        "sha": sha,
         "branch": branch,
     }
 
@@ -203,12 +194,15 @@ def watchlist_get():
         return err
 
     try:
-        watchlist, _ = get_file("alerts/watchlist.json", data=True)
+        watchlist, sha = get_file("alerts/watchlist.json", data=True)
         if not isinstance(watchlist, dict):
             return jsonify({
                 "error": "Watchlist file must contain a JSON object."
             }), 502
-        return jsonify(watchlist)
+        response = jsonify(watchlist)
+        response.set_etag(sha)
+        response.headers['Cache-Control'] = 'no-store'
+        return response
 
     except requests.RequestException:
         app.logger.exception("GitHub request failed while reading watchlist")
@@ -229,6 +223,11 @@ def watchlist_put():
     err = require_auth()
     if err:
         return err
+
+    revisions = request.if_match.as_set()
+    sha = next(iter(revisions), '')
+    if len(revisions) != 1 or len(sha) != 40 or any(c not in '0123456789abcdef' for c in sha):
+        return jsonify({'error': 'Reload the Watchlist before saving.'}), 428
 
     incoming = request.get_json(silent=True)
     if not isinstance(incoming, dict):
@@ -302,14 +301,24 @@ def watchlist_put():
             "alerts/watchlist.json",
             cleaned,
             "Update watchlist from web dashboard",
+            sha=sha,
             data=True,
         )
 
-        return jsonify({
+        response = jsonify({
             "ok": True,
             "message": "Watchlist saved to the private data repository.",
             "commit": result.get("commit", {}).get("sha"),
         })
+        response.set_etag(result['content']['sha'])
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+
+    except requests.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code in (409, 422):
+            return jsonify({'error': 'The watchlist changed. Reopen Watchlist to load the latest targets before saving.'}), 409
+        app.logger.exception('Watchlist update failed')
+        return jsonify({'error': 'Could not save the watchlist to GitHub.'}), 502
 
     except requests.RequestException:
         app.logger.exception("GitHub request failed while saving watchlist")

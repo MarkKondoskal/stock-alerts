@@ -23,7 +23,7 @@ The scanner uses Yahoo Finance/yfinance fundamentals. A **TRIM** target is trigg
 1. Push the repository to GitHub.
 2. Open **Settings → Secrets and variables → Actions**.
 3. Add the Discord webhook secrets used by the workflows in this repository. For the stock alert scanner, set `DISCORD_STOCK_WEBHOOK`. The watchlist manager accepts `DISCORD_WATCHLIST_WEBHOOK` or falls back to `DISCORD_STOCK_WEBHOOK`.
-4. Ensure GitHub Actions has permission to commit changes to `alerts/watchlist.json` (the workflow uses repository contents write permission).
+4. Set the Actions variable STOCKALERTS_DATA_REPOSITORY to the private repository (OWNER/REPO), and set STOCKALERTS_DATA_BRANCH if its branch differs from main. Set the STOCKALERTS_DATA_TOKEN secret with Contents read/write permission on that repository.
 5. Run workflows manually once to confirm the secrets and permissions are correct.
 
 Never commit webhook URLs or other credentials directly into source files.
@@ -58,7 +58,7 @@ Use the same **Metric**, **Target**, and **Direction** inputs with action `REMOV
 
 ## Watchlist data format
 
-The data lives in `alerts/watchlist.json`. The manager migrates older valuation lists as trim targets for backward compatibility. New valuation targets use this structure:
+The shared watchlist lives in `alerts/watchlist.json` in the private data repository. The manager migrates older valuation lists as trim targets for backward compatibility. New valuation targets use this structure:
 
 ```json
 {
@@ -78,7 +78,7 @@ The data lives in `alerts/watchlist.json`. The manager migrates older valuation 
 }
 ```
 
-The watchlist manager commits changes to `alerts/watchlist.json` when run through GitHub Actions. Avoid editing the file at the same time as a workflow run.
+The Watchlist Manager and stock checker commit changes to the private watchlist. If a dashboard save reports a conflict, reopen Watchlist and apply your changes to the latest version.
 
 ## Workflows
 

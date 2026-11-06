@@ -8,7 +8,7 @@ on:
 
 # Both workflows can edit alerts/watchlist.json. Run only one at a time.
 concurrency:
-  group: stock-alerts-watchlist-${{ github.ref }}
+  group: stock-alerts-private-watchlist
   cancel-in-progress: false
 
 jobs:
@@ -20,6 +20,26 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
+
+      - name: Verify private data repository
+        env:
+          DATA_REPOSITORY: ${{ vars.STOCKALERTS_DATA_REPOSITORY }}
+          GH_TOKEN: ${{ secrets.STOCKALERTS_DATA_TOKEN }}
+        run: |
+          test -n "$DATA_REPOSITORY"
+          test -n "$GH_TOKEN"
+          test "$(gh api "repos/$DATA_REPOSITORY" --jq .private)" = true
+
+      - name: Checkout private watchlist
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.STOCKALERTS_DATA_REPOSITORY }}
+          ref: ${{ vars.STOCKALERTS_DATA_BRANCH || 'main' }}
+          token: ${{ secrets.STOCKALERTS_DATA_TOKEN }}
+          path: _private
+
+      - name: Check private watchlist exists
+        run: test -f _private/alerts/watchlist.json
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -35,8 +55,15 @@ jobs:
         id: stock_quotes
         continue-on-error: true
         env:
+          STOCKALERTS_WATCHLIST_FILE: _private/alerts/watchlist.json
           DISCORD_STOCK_WEBHOOK: ${{ secrets.DISCORD_STOCK_WEBHOOK }}
         run: python alerts/stock_alert.py
+
+      - name: Commit triggered target removals to private repository
+        working-directory: _private
+        env:
+          STOCKALERTS_PUSH_BRANCH: ${{ vars.STOCKALERTS_DATA_BRANCH || 'main' }}
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/commit_and_push.sh" "Update private watchlist" alerts/watchlist.json
 
       # --- 2. MARKET SENTIMENT ---
       - name: Run Market Sentiment Script
@@ -45,8 +72,8 @@ jobs:
         run: python alerts/sentiment_alert.py
 
       # --- 3. AUTO-COMMIT UPDATES ---
-      - name: Auto-commit Watchlist & Sentiment State
-        run: bash .github/scripts/commit_and_push.sh "Auto-updated price targets and sentiment state" alerts/watchlist.json alerts/sentiment_state.json
+      - name: Auto-commit Sentiment State
+        run: bash .github/scripts/commit_and_push.sh "Auto-update sentiment state" alerts/sentiment_state.json
 
       - name: Report quote refresh failure
         if: steps.stock_quotes.outcome == 'failure'

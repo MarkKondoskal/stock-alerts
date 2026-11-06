@@ -11,7 +11,7 @@ warnings.filterwarnings("ignore", message=".*utcnow.*")
 
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_STOCK_WEBHOOK") or os.environ.get("DISCORD_WEBHOOK_URL")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-WATCHLIST_FILE = os.path.join(BASE_DIR, "watchlist.json")
+WATCHLIST_FILE = os.environ.get("STOCKALERTS_WATCHLIST_FILE") or os.path.join(BASE_DIR, "watchlist.json")
 
 
 def normalize_entry(entry):
