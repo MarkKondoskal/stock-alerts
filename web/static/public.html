@@ -361,32 +361,6 @@
             </button>
         </header>
 
-        <div id="publicMessage"
-             class="public-message"
-             role="status"
-             aria-live="polite"
-             hidden></div>
-
-        <div class="account-switcher" aria-label="Portfolio account view">
-            <span class="public-muted">Account</span>
-            <div class="account-options" role="group" aria-label="Selected portfolio account">
-                <button type="button" class="account-option active" data-account="combined" aria-pressed="true">Combined</button>
-                <button type="button" class="account-option" data-account="us" aria-pressed="false">US · Merrill</button>
-                <button type="button" class="account-option" data-account="dk" aria-pressed="false">DK · Nordnet</button>
-            </div>
-            <span class="public-muted currency-caption" data-holdings-control>Currency</span>
-            <div class="account-options currency-options" data-holdings-control role="group" aria-label="Displayed currency">
-                <button type="button" class="currency-option active" data-currency="USD" aria-pressed="true">USD $</button>
-                <button type="button" class="currency-option" data-currency="DKK" aria-pressed="false">DKK kr</button>
-            </div>
-            <span class="public-muted" data-holdings-control>ETFs</span>
-            <div class="account-options" data-holdings-control role="group" aria-label="ETF holdings filter">
-                <button type="button" class="etf-option active" data-etfs="excluded" aria-pressed="true">Excluded</button>
-                <button type="button" class="etf-option" data-etfs="included" aria-pressed="false">Included</button>
-            </div>
-        </div>
-        <p id="accountStatus" class="public-muted" role="status" aria-live="polite">Showing combined holdings</p>
-        <p id="publicDataFreshness" class="public-muted" role="status" aria-live="polite" style="margin:0 0 18px;font-size:.8rem">Holdings and performance may have different update dates.</p>
         <div class="public-tabs"
              role="tablist"
              aria-label="Portfolio sections">
@@ -423,6 +397,33 @@
                 Sentiment
             </button>
         </div>
+
+        <div id="publicMessage"
+             class="public-message"
+             role="status"
+             aria-live="polite"
+             hidden></div>
+
+        <div class="account-switcher" aria-label="Portfolio account view">
+            <span class="public-muted">Account</span>
+            <div class="account-options" role="group" aria-label="Selected portfolio account">
+                <button type="button" class="account-option active" data-account="combined" aria-pressed="true">Combined</button>
+                <button type="button" class="account-option" data-account="us" aria-pressed="false">US · Merrill</button>
+                <button type="button" class="account-option" data-account="dk" aria-pressed="false">DK · Nordnet</button>
+            </div>
+            <span class="public-muted currency-caption" data-holdings-control>Currency</span>
+            <div class="account-options currency-options" data-holdings-control role="group" aria-label="Displayed currency">
+                <button type="button" class="currency-option active" data-currency="USD" aria-pressed="true">USD $</button>
+                <button type="button" class="currency-option" data-currency="DKK" aria-pressed="false">DKK kr</button>
+            </div>
+            <span class="public-muted" data-holdings-control>ETFs</span>
+            <div class="account-options" data-holdings-control role="group" aria-label="ETF holdings filter">
+                <button type="button" class="etf-option active" data-etfs="excluded" aria-pressed="true">Excluded</button>
+                <button type="button" class="etf-option" data-etfs="included" aria-pressed="false">Included</button>
+            </div>
+        </div>
+        <p id="accountStatus" class="public-muted" role="status" aria-live="polite">Showing combined holdings</p>
+        <p id="publicDataFreshness" class="public-muted" role="status" aria-live="polite" style="margin:0 0 18px;font-size:.8rem">Holdings and performance may have different update dates.</p>
 
         <!-- TAB 1: HOLDINGS -->
         <section
