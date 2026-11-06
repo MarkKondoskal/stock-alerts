@@ -7,3 +7,6 @@ __pycache__/
 # Private portfolio checkout and legacy local data
 /_private/
 /portfolio/marks_portfolio.json
+
+# The live watchlist is stored in the private data repository.
+/alerts/watchlist.json

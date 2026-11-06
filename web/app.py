@@ -662,28 +662,22 @@ def _account_documents():
 def _private_csv(path):
     """Read an allowlisted CSV from the private repository, server-side only."""
     if path not in (
-        "portfolio/performance/merrill_2026_ytd_provisional.csv",
+        "portfolio/performance/merrill_history_provisional.csv",
         "portfolio/performance/nordnet_all_available_provisional.csv",
-        "portfolio/performance/combined_2026_ytd_provisional.csv",
-        "portfolio/performance/merrill_no_etf_2026_ytd_provisional.csv",
-        "portfolio/performance/combined_no_etf_2026_ytd_provisional.csv",
-        "portfolio/performance/attribution_us.csv",
-        "portfolio/performance/attribution_us_excluded.csv",
-        "portfolio/performance/attribution_dk.csv",
-        "portfolio/performance/attribution_dk_excluded.csv",
+        "portfolio/performance/combined_history_provisional.csv",
+        "portfolio/performance/merrill_no_etf_history_provisional.csv",
+        "portfolio/performance/combined_no_etf_history_provisional.csv",
         "portfolio/performance/nordnet_no_etf_all_available_provisional.csv",
-        "portfolio/performance/attribution_combined.csv",
-        "portfolio/performance/attribution_combined_excluded.csv",
     ):
         raise ValueError("Unapproved private file path")
-    headers = gh_headers()
-    if '/attribution_' in path:
-        headers['Accept'] = 'application/vnd.github.raw+json'
-    response = requests.get(repo_url(path, data=True), headers=headers, timeout=20)
-    response.raise_for_status()
-    if '/attribution_' in path:
-        return response.content.decode('utf-8')
-    return base64.b64decode(response.json()["content"]).decode("utf-8")
+    from performance_files import read_history
+
+    def fetch(file_path):
+        response = requests.get(repo_url(file_path, data=True), headers=gh_headers(), timeout=20)
+        response.raise_for_status()
+        return base64.b64decode(response.json()["content"]).decode("utf-8")
+
+    return read_history(path, fetch)
 
 
 @app.get("/api/public/analytics")
@@ -807,7 +801,7 @@ def private_holdings_analytics_get():
         from account_public import analytics
         us, dk = _account_documents()
         result = jsonify(analytics(us, dk, account, period, _private_csv,
-                                   currency=currency, include_etfs=(etfs == 'included'), private=True))
+                                   currency=currency, include_etfs=(etfs == 'included')))
         result.headers['Cache-Control'] = 'private, no-store'
         return result
     except Exception:

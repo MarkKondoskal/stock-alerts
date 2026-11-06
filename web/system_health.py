@@ -4,6 +4,8 @@ from datetime import date, datetime, timezone
 
 import requests
 
+from performance_files import read_history
+
 CHECKS = (
     ('Portfolio history update', 'daily_portfolio_performance.yml', True, 32),
     ('Discord heartbeat delivery', 'heartbeat.yml', False, 32),
@@ -42,7 +44,7 @@ def dashboard(get_runs, get_file, now=None):
 
     def history(name, filename, key):
         try:
-            data, _ = get_file('portfolio/performance/' + filename, data=True)
+            data, _ = read_history('portfolio/performance/' + filename, lambda path: get_file(path, data=True))
             through = date.fromisoformat(data[key])
             days = 4 if weekend else 2
             return {'name': name, 'through': through.isoformat(),
@@ -53,6 +55,6 @@ def dashboard(get_runs, get_file, now=None):
     with ThreadPoolExecutor(max_workers=len(CHECKS)) as pool:
         workflows = list(pool.map(check, CHECKS))
     return {'as_of': now.isoformat(), 'workflows': workflows, 'data': [
-        history('Merrill performance', 'merrill_2026_ytd_summary.json', 'through'),
+        history('Merrill performance', 'merrill_history_summary.json', 'through'),
         history('Nordnet performance', 'nordnet_performance_summary.json', 'history_through'),
-        history('Combined performance', 'combined_2026_ytd_summary.json', 'end')]}
+        history('Combined performance', 'combined_history_summary.json', 'end')]}

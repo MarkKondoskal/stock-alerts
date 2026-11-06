@@ -113,9 +113,9 @@ def _series(csv_text, portfolio_col, spy_col):
         if day and p is not None and s is not None:result.append((day,p,s))
     return sorted(result)
 
-def _select_period(rows,period):
+def _select_period(rows, period, today=None):
     if not rows:return []
-    last=date.fromisoformat(rows[-1][0]); start=(date(last.year-1,12,31) if period=='YTD' else
+    last=date.fromisoformat(rows[-1][0]); start=(date((today or date.today()).year - 1, 12, 31) if period=='YTD' else
         last-timedelta(days=PERIODS[period]) if PERIODS[period] is not None else date.min)
     # A valid chart must have an observation at or before the start boundary.
     initial=[i for i,row in enumerate(rows) if date.fromisoformat(row[0])<=start]
@@ -167,8 +167,7 @@ def _convert_series(rows, from_currency, to_currency, fx):
     return out
 
 
-def analytics(us,dk,account,period,read_csv,currency='USD',include_etfs=False,private=False):
-    from advanced_analytics import attribution, risk_metrics
+def analytics(us,dk,account,period,read_csv,currency='USD',include_etfs=False):
     if period not in PERIODS or currency not in ('USD','DKK'):
         raise ValueError('Invalid analytics period or currency')
     positions=_positions(us,dk,account,include_etfs)
@@ -181,7 +180,7 @@ def analytics(us,dk,account,period,read_csv,currency='USD',include_etfs=False,pr
         # Daily combined weights must be calculated from dated securities positions,
         # never averaged from two portfolio return percentages.
         try:
-            combined_text=read_csv('portfolio/performance/combined_2026_ytd_provisional.csv' if include_etfs else 'portfolio/performance/combined_no_etf_2026_ytd_provisional.csv')
+            combined_text=read_csv('portfolio/performance/combined_history_provisional.csv' if include_etfs else 'portfolio/performance/combined_no_etf_history_provisional.csv')
             key='portfolio_usd_pct' if currency=='USD' else 'portfolio_dkk_pct'
             rows=[(r['date'],_num(r.get(key)),benchmark.get(r['date']))
                   for r in csv.DictReader(io.StringIO(combined_text))]
@@ -189,10 +188,10 @@ def analytics(us,dk,account,period,read_csv,currency='USD',include_etfs=False,pr
             note='Provisional combined invested-securities return, weighted by each account’s historical market value, in '+currency+'. Excludes idle cash, ADBE and unrecorded dividends.'
         except (ValueError,KeyError,RuntimeError,OSError,requests.RequestException):
             rows=[]
-            note='This performance mode requires its private calculation workflow. Run ETF Performance Reconstruction and commit its output CSV. Older combined periods are not yet supported.'
+            note='This performance mode requires its private calculation workflow. Run Daily Portfolio Performance in the private repository. Older combined periods are not yet supported.'
     elif account=='us':
         try:
-            text=read_csv('portfolio/performance/merrill_2026_ytd_provisional.csv' if include_etfs else 'portfolio/performance/merrill_no_etf_2026_ytd_provisional.csv')
+            text=read_csv('portfolio/performance/merrill_history_provisional.csv' if include_etfs else 'portfolio/performance/merrill_no_etf_history_provisional.csv')
             raw=[(r['date'],_num(r.get('portfolio_pct')),benchmark.get(r['date']))
                  for r in csv.DictReader(io.StringIO(text))]
             raw=[r for r in raw if r[1] is not None and r[2] is not None]
@@ -200,7 +199,7 @@ def analytics(us,dk,account,period,read_csv,currency='USD',include_etfs=False,pr
             note=f'Provisional Merrill invested-securities return in {currency}, SPY in {currency}. Excludes ADBE, idle cash and dividends.'
         except (ValueError,KeyError,RuntimeError,OSError,requests.RequestException):
             rows=[]
-            note='ETF-excluded historical returns are not published yet. Run ETF Excluded Performance Reconstruction in the private repository.'
+            note='ETF-excluded historical returns are not published yet. Run Daily Portfolio Performance in the private repository.'
     else:
         if not include_etfs and any(t.get('ticker') in ETF_TICKERS for t in dk.get('transactions', [])):
             try:
@@ -216,16 +215,7 @@ def analytics(us,dk,account,period,read_csv,currency='USD',include_etfs=False,pr
     performance=_select_period(sorted(rows),period)
     gainers=_cached(('gainers',account,period,include_etfs,tuple(sorted(p['ticker'] for p in positions))),
                     lambda:_gainers(positions,period),600)
-    advanced = risk_metrics(performance)
-    mode = account + ('_excluded' if not include_etfs else '')
-    advanced['contributions'] = []
-    if performance:
-        try:
-            advanced['contributions'] = attribution(
-                read_csv(f'portfolio/performance/attribution_{mode}.csv'), performance, currency, private)
-        except (ValueError, KeyError, RuntimeError, OSError, requests.RequestException):
-            pass
-    return {'advanced':advanced, 'period':period,'account':account,'currency':currency,'include_etfs':include_etfs,
+    return {'period':period,'account':account,'currency':currency,'include_etfs':include_etfs,
             'performance':[{'date':p['date'],'value':p['portfolio']} for p in performance],
             'spy':[{'date':p['date'],'value':p['spy']} for p in performance],
             'gainers':gainers,'performance_note':note,

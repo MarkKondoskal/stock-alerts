@@ -1,15 +1,17 @@
-import json
 import os
 from pathlib import Path
 import sys
 import unittest
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from unittest.mock import Mock, patch
+
+import requests
 from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'web'))
 
-from advanced_analytics import attribution, risk_metrics
+from account_public import _select_period
+from performance_files import read_history
 from app import app
 from economic_calendar import fomc_actual, parse_rows
 from system_health import summarize
@@ -63,20 +65,29 @@ class StockUpgrades(unittest.TestCase):
             self.assertEqual(conflict.status_code, 409)
             put.assert_not_called()
 
-    def test_risk_and_privacy_projection(self):
-        points = [{'date': '2026-01-05', 'portfolio': 0, 'spy': 0},
-                  {'date': '2026-01-06', 'portfolio': 10, 'spy': 5},
-                  {'date': '2026-01-07', 'portfolio': 1, 'spy': 2}]
-        metrics = risk_metrics(points)
-        self.assertEqual(metrics['max_drawdown_pct'], -8.182)
-        self.assertEqual(metrics['relative_pp'], -1)
-        self.assertGreater(metrics['volatility_pct'], 0)
-        text = 'previous_date,date,currency,market_move,fraction\n' + '\n'.join(
-            f'{old["date"]},{p["date"]},USD,"{{""ABC"":123456}}","{{""ABC"":0.05}}"' for old, p in zip(points, points[1:]))
-        public = attribution(text, points, 'USD')
-        self.assertEqual(public, [{'ticker': 'ABC', 'contribution_pp': 10.5}])
-        self.assertNotIn('123456', json.dumps(public))
-        self.assertEqual(attribution(text, points, 'USD', True)[0]['market_move_amount'], 246912)
+    def test_legacy_history_fallback_only_for_missing_file(self):
+        path = 'portfolio/performance/merrill_history_provisional.csv'
+        for status in (404, 403):
+            fetch = Mock(side_effect=[
+                requests.HTTPError(response=Mock(status_code=status)), 'old history',
+            ])
+            if status == 404:
+                self.assertEqual(read_history(path, fetch), 'old history')
+                fetch.assert_called_with('portfolio/performance/merrill_2026_ytd_provisional.csv')
+            else:
+                with self.assertRaises(requests.HTTPError):
+                    read_history(path, fetch)
+                fetch.assert_called_once_with(path)
+
+    def test_ytd_uses_previous_year_close_across_new_year(self):
+        rows = [('2026-12-29', 12, 6), ('2026-12-30', 20, 10),
+                ('2027-01-04', 26, 12.2)]
+        result = _select_period(rows, 'YTD', today=date(2027, 1, 4))
+        self.assertEqual(result, [
+            {'date': '2026-12-30', 'portfolio': 0, 'spy': 0},
+            {'date': '2027-01-04', 'portfolio': 5, 'spy': 2},
+        ])
+        self.assertEqual(_select_period(rows[:2], 'YTD', today=date(2027, 1, 1)), [])
 
     def test_calendar_uses_release_and_reference_dates_separately(self):
         jobs = ['Friday, November 06, 2026 08:30 AM Employment Situation for October 2026']

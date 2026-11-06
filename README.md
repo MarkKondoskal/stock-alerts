@@ -90,6 +90,8 @@ The Marks Portfolio Manager and Portfolio Earnings Report use the private data r
 
 ## Local testing
 
+To run the stock checker or Watchlist Manager locally, set STOCKALERTS_WATCHLIST_FILE to the private checkout’s alerts/watchlist.json. The scheduled workflows set this path automatically.
+
 Install Python 3.11 and dependencies:
 
 ```bash
