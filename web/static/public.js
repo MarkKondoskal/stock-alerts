@@ -671,6 +671,7 @@ function initializeGainersSelector() {
 }
 // Refresh also clears short-lived browser request memoization.
 elements.refreshButton.addEventListener("click", () => {
+    if (!elements.tradeActivityPanel.hidden) window.loadPublicTradeActivity();
     analyticsRequests.clear();
     loadFixedAllocation();
     updatePerformance();

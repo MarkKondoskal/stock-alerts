@@ -20,8 +20,8 @@ class TradeJournalTest(unittest.TestCase):
         second = dict(ticker='XYZ', date='2026-10-21', action='SELL', event_id='private-id',
                       journal={'note': 'Private note', 'published': False})
         account = {'transactions': [first, second]}
-        public_first = {'date': '2026-10-20', 'ticker': 'ABC', 'action': 'BUY', 'note': ''}
-        public_second = {'date': '2026-10-21', 'ticker': 'XYZ', 'action': 'SELL', 'note': ''}
+        public_first = {'date': '2026-10-20', 'ticker': 'ABC', 'action': 'BUY', 'position_change': 'New holding', 'note': ''}
+        public_second = {'date': '2026-10-21', 'ticker': 'XYZ', 'action': 'SELL', 'position_change': None, 'note': ''}
         default_activity = {'trades': [public_second, public_first]}
         key = next(journal_trades(account))[0]
         body = {'account': 'us', 'trade_id': key, 'note': 'Thesis intact.', 'published': True}
@@ -63,7 +63,7 @@ class TradeJournalTest(unittest.TestCase):
             'account': 'us', 'action': 'BUY', 'ticker': 'ABC',
             'date': '2025-10-17', 'quantity': 4, 'price': 25, 'currency': 'USD',
         })
-        public = {'date': '2025-10-17', 'ticker': 'ABC', 'action': 'BUY', 'note': ''}
+        public = {'date': '2025-10-17', 'ticker': 'ABC', 'action': 'BUY', 'position_change': 'New holding', 'note': ''}
         self.assertEqual(public_activity([account]), [public])
         event['journal'] = {'note': 'My reason', 'published': False}
         self.assertEqual(public_activity([account]), [public])
@@ -94,3 +94,16 @@ class TradeJournalTest(unittest.TestCase):
         dk['transactions'][0]['net_cash_movement_dkk'] = None
         self.assertEqual(realized_summary((('dk', dk),), 'dk', 'DKK', True, 6.5),
                          {'amount': None, 'included': 0, 'missing': 1})
+
+    def test_public_position_change_bands_and_reopening(self):
+        events = [
+            ('BUY', 4), ('BUY', 3), ('SPLIT', 7), ('SELL', 7), ('SELL', 7), ('BUY', 2),
+        ]
+        trades = [dict(date=f'2025-01-0{i}', ticker='XYZ', action=action, quantity=units, split_ratio=2)
+                  for i, (action, units) in enumerate(events, 1)]
+        activity = public_activity([{'transactions': trades}])
+        self.assertEqual([row['position_change'] for row in activity], [
+            'New holding', 'Closed position', 'Reduced position by 50–100%',
+            'Increased position by 50–100%', 'New holding',
+        ])
+        self.assertNotIn('quantity', activity[0])

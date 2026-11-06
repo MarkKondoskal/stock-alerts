@@ -267,7 +267,18 @@
         .analytics-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 22px; }
         .analytics-card { padding: 19px; background: #111; border: 1px solid #292929; border-radius: 12px; min-width: 0; }
         .analytics-card.full { grid-column: 1 / -1; }
-        #public-trade-activity td:last-child { white-space: pre-wrap; overflow-wrap: anywhere; }
+        .trade-feed { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 8px; }
+        .trade-feed-entry { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 14px; padding: 12px 14px; border: 1px solid #292929; border-radius: 9px; background: #171717; }
+        .trade-feed-badge { font-size: .7rem; font-weight: 700; min-width: 3.4rem; text-align: center; padding: 5px 7px; border-radius: 5px; }
+        .trade-feed-buy { color: #5eead4; background: #12302c; }
+        .trade-feed-sell { color: #fda4af; background: #351e25; }
+        .trade-feed-change, .trade-feed-note { margin: 4px 0 0; font-size: .84rem; color: #aaa; }
+        .trade-feed-note { white-space: pre-wrap; overflow-wrap: anywhere; }
+        .trade-feed-entry time { color: #aaa; font-size: .76rem; white-space: nowrap; }
+        @media(max-width: 480px) {
+            .trade-feed-entry { grid-template-columns: auto minmax(0, 1fr); gap: 6px 10px; }
+            .trade-feed-entry time { grid-column: 2; }
+        }
         .analytics-title { margin: 0; font-size: 1.05rem; }
         .analytics-head { display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
         .analytics-chart { height: 310px; position:relative; }
@@ -544,7 +555,7 @@
             aria-labelledby="tradeActivityTab" hidden>
             <div class="analytics-card">
                 <h2>Trade Activity</h2>
-                <p>Recorded buys and sells from both portfolios. Notes appear here when shared.</p>
+                <p>Recorded buys and sells from both portfolios. Position changes are based on each account’s trade history.</p>
                 <div id="public-trade-activity" aria-live="polite"></div>
             </div>
         </section>
@@ -560,7 +571,7 @@
         </footer>
     </main>
 
-    <script src="/static/stock_upgrades.js?v=all-trade-activity-1" defer></script><script src="/static/public.js?v=trade-journal-1" defer></script>
+    <script src="/static/stock_upgrades.js?v=trade-feed-1" defer></script><script src="/static/public.js?v=trade-feed-1" defer></script>
     <script src="/static/sentiment_ui.js?v=trade-journal-1" defer></script>
 </body>
 </html>

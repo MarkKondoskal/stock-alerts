@@ -31,6 +31,40 @@
     return link;
   }
   const local = stamp => stamp ? new Date(stamp).toLocaleString() : 'Unavailable';
+  function tradeFeed(trades) {
+    const feed = element('ul');
+    feed.className = 'trade-feed';
+    const dates = new Intl.DateTimeFormat(undefined, {dateStyle: 'medium', timeZone: 'UTC'});
+    for (const trade of trades) {
+      const buy = trade.action === 'BUY';
+      const entry = element('li');
+      entry.className = 'trade-feed-entry';
+      const badge = element('span', buy ? 'BUY' : 'SELL');
+      badge.className = 'trade-feed-badge ' + (buy ? 'trade-feed-buy' : 'trade-feed-sell');
+      const body = element('div');
+      body.className = 'trade-feed-body';
+      body.append(element('strong', (buy ? 'Bought ' : 'Sold ') + trade.ticker));
+      if (trade.position_change) {
+        const change = element('p', trade.position_change);
+        change.className = 'trade-feed-change';
+        body.append(change);
+      }
+      if (trade.note) {
+        const note = element('p', trade.note);
+        note.className = 'trade-feed-note';
+        body.append(note);
+      }
+      const time = element('time');
+      if (trade.date) {
+        const date = new Date(trade.date + 'T00:00:00Z');
+        time.dateTime = trade.date;
+        time.textContent = Number.isNaN(date.getTime()) ? trade.date : dates.format(date);
+      }
+      entry.append(badge, body, time);
+      feed.append(entry);
+    }
+    return feed;
+  }
   window.loadPublicTradeActivity = async () => {
     const node = document.getElementById('public-trade-activity');
     node.replaceChildren(element('p', 'Loading trade activity…'));
@@ -39,9 +73,7 @@
       if (!response.ok) throw new Error('Trade activity temporarily unavailable.');
       const {trades} = await response.json();
       node.replaceChildren(trades.length
-        ? table(['Date', 'Ticker', 'Side', 'Note'], trades.map(trade => [
-            trade.date, trade.ticker, trade.action, element('span', trade.note || '—'),
-          ]))
+        ? tradeFeed(trades)
         : element('p', 'No buys or sells are available.'));
     } catch {
       node.replaceChildren(element('p', 'Trade activity temporarily unavailable.'));
