@@ -112,19 +112,24 @@ function tradeNoteEditor(trade){
   publish.type='checkbox';
   publish.checked=trade.published;
   publish.disabled=trade.action==='SPLIT';
-  label.append(publish,' Share on the public site');
+  label.append(publish,trade.activity_public?' Share this note on the public site':' Share on the public site');
   const help=document.createElement('small');
-  help.textContent='Sharing posts the date, ticker, side and your note. Keep account details and amounts out of any note you share.';
+  help.textContent=trade.activity_public
+    ? 'This trade’s date, ticker and side are already public. Keep account details and amounts out of any note you share.'
+    : 'Sharing posts the date, ticker, side and your note. Keep account details and amounts out of any note you share.';
   const save=document.createElement('button');
   save.type='button';
   save.className='ghost';
   save.textContent='Save note';
   const status=document.createElement('small');
   status.setAttribute('role','status');
-  const updateLabel=()=>{summary.textContent=(trade.note?'Edit note':'Add note')+' · '+(trade.published?'Public':'Private');};
+  const updateLabel=()=>{
+    const visibility=trade.published?'Public note':trade.activity_public?'Public trade · private note':'Private';
+    summary.textContent=(trade.note?'Edit note':'Add note')+' · '+visibility;
+  };
   updateLabel();
   save.onclick=async()=>{
-    if(publish.checked&&!confirm('Publish this trade’s date, ticker, side and note for anyone to read?'))return;
+    if(publish.checked&&!confirm(trade.activity_public?'Publish this note for anyone to read?':'Publish this trade’s date, ticker, side and note for anyone to read?'))return;
     save.disabled=true;
     try{
       const result=await api('/api/private/trades/journal',{method:'PATCH',body:JSON.stringify({
@@ -133,7 +138,7 @@ function tradeNoteEditor(trade){
       trade.note=textarea.value=result.note;
       trade.published=result.published;
       updateLabel();
-      status.textContent=result.published?'Saved and published.':'Saved privately.';
+      status.textContent=result.published?'Saved and published.':'Note saved privately.';
     }catch(error){status.textContent=error.message;}
     finally{save.disabled=false;}
   };

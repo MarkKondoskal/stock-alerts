@@ -173,7 +173,9 @@ def put_file(path, content, message, data=False):
 
 @app.get("/")
 def index():
-    return send_from_directory(app.static_folder, "index.html")
+    response = send_from_directory(app.static_folder, "index.html")
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 @app.get("/api/health")
@@ -898,6 +900,7 @@ def private_trade_history():
                     'trade_id':trade_id,
                     'note':journal.get('note', ''),
                     'published':journal.get('published') is True,
+                    'activity_public':t.get('activity_public') is True and t['action'] in ('BUY', 'SELL'),
                     'event_id':t.get('event_id'),
                     'account':account,
                     'action':t.get('action'),

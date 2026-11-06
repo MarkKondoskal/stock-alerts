@@ -23,7 +23,7 @@ function privateMoney(n, decimals=2) {
 function privatePercent(n) {return n === null || n === undefined || !Number.isFinite(Number(n)) ? '—' : (Number(n)>0?'+':'')+privateNum(n)+'%';}
 function privateSignedMoney(n){return n === null || n === undefined ? '—' : (Number(n)>0?'+':'')+privateMoney(n);}
 function privateEscape(v) {return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function privateColor(node,n) {node.classList.toggle('private-positive',Number(n)>0);node.classList.toggle('private-negative',Number(n)<0);}
+function privateColor(node,n) {if(!node)return;node.classList.toggle('private-positive',Number(n)>0);node.classList.toggle('private-negative',Number(n)<0);}
 function privateSet(id,text){const element=document.getElementById(id);if(element)element.textContent=text;}
 function privateQuery(period){const s=privateHoldingsState;return `?account=${encodeURIComponent(s.account)}&currency=${s.currency}&etfs=${s.etfs}&period=${period}`;}
 function privateCheckChart(){if(typeof Chart==='undefined') throw Error('Chart library unavailable. Check your connection and reload.');}
@@ -47,17 +47,27 @@ function privateDoughnut(id,names,values,labels){
         {cutout:'67%',plugins:{legend:{position:'right',labels:{color:'#bbb',boxWidth:10,font:{size:10}}},
         tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${privateMoney(labels[ctx.dataIndex])} · ${privateNum(ctx.parsed/values.reduce((a,b)=>a+b,0)*100)}%`}}}});
 }
+function privateRenderRealized(realized){
+    const value=document.getElementById('private-realized')||document.getElementById('private-position-count');
+    const note=document.getElementById('private-realized-note')||document.getElementById('private-ticker-count');
+    if(value){
+        const label=value.closest('.metric')?.querySelector('label');
+        if(label)label.textContent='Realized P/L';
+        value.textContent=privateSignedMoney(realized?.amount);
+        privateColor(value,realized?.amount);
+    }
+    if(note){
+        const recorded=realized?.included?'Recorded sales · current FX':'No recorded realized amounts';
+        note.textContent=recorded+(realized?.missing?' · '+realized.missing+' without figures':'');
+    }
+}
 function privateRenderSnapshot(s){
     privateSet('private-market-value',privateMoney(s.market_value));
     privateSet('private-cost-basis',privateMoney(s.cost_basis));
     privateSet('private-unrealized',privateSignedMoney(s.unrealized_pl));
     privateColor(document.getElementById('private-unrealized'),s.unrealized_pl);
     privateSet('private-unrealized-pct',`${privatePercent(s.unrealized_pl_pct)} on open positions · not realized`);
-    const realized=s.realized;
-    privateSet('private-realized',privateSignedMoney(realized.amount));
-    privateColor(document.getElementById('private-realized'),realized.amount);
-    const recorded=realized.included ? 'Recorded sales · current FX' : 'No recorded realized amounts';
-    privateSet('private-realized-note',recorded+(realized.missing ? ' · '+realized.missing+' without figures' : ''));
+    privateRenderRealized(s.realized);
     const dates=Object.entries(s.positions_as_of||{}).map(([account,day])=>`${privateLabel[account]} ${day||'unknown'}`).join(' · ');
     privateSet('private-freshness',`${dates||'Account dates unavailable'} · Latest available closes · ${s.currency} · ETFs ${s.include_etfs?'included':'excluded'}`);
     const rows=(s.holdings||[]).map(h=>{
@@ -87,7 +97,8 @@ async function privateLoadSnapshot(version){
     }catch(error){if(version!==privateHoldingsState.version)return;
         privateSet('private-freshness','Private holdings unavailable: '+error.message);
         document.getElementById('private-holdings-rows').innerHTML='<tr><td colspan="11">Could not fetch current account positions or prices. Try Refresh holdings.</td></tr>';
-        for(const id of ['private-market-value','private-cost-basis','private-unrealized','private-realized','private-realized-note'])privateSet(id,'—');
+        for(const id of ['private-market-value','private-cost-basis','private-unrealized'])privateSet(id,'—');
+        privateRenderRealized();
         for(const id of ['private-holdings-chart','private-sector-chart'])privateEmptyChart(id);
     }
 }

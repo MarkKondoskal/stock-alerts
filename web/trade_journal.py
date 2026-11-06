@@ -31,9 +31,10 @@ def public_activity(documents):
     for document in documents:
         for _, trade in journal_trades(document):
             journal = trade.get('journal', {})
-            if journal.get('published') is not True or trade['action'] not in ('BUY', 'SELL'):
+            share_note = journal.get('published') is True
+            if trade['action'] not in ('BUY', 'SELL') or not (trade.get('activity_public') is True or share_note):
                 continue
             rows.append({'date': trade.get('date') or trade.get('trade_date'),
                          'ticker': trade['ticker'], 'action': trade['action'],
-                         'note': journal.get('note', '')})
+                         'note': journal.get('note', '') if share_note else ''})
     return sorted(rows, key=lambda row: row['date'] or '', reverse=True)

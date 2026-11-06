@@ -10,7 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'web'))
 
 from app import app
 from private_holdings import realized_summary
-from trade_journal import journal_trades
+from trade_journal import journal_trades, public_activity
+from trade_manager import record_trade
 
 
 class TradeJournalTest(unittest.TestCase):
@@ -53,3 +54,22 @@ class TradeJournalTest(unittest.TestCase):
                          {'amount': 10, 'included': 2, 'missing': 1})
         self.assertEqual(realized_summary(accounts, 'us', 'DKK', True, 6.5),
                          {'amount': 182, 'included': 2, 'missing': 1})
+
+    def test_new_trade_is_public_but_its_note_requires_sharing(self):
+        source = {'positions': [], 'transactions': []}
+        account, event = record_trade(source, {
+            'account': 'us', 'action': 'BUY', 'ticker': 'ABC',
+            'date': '2025-10-17', 'quantity': 4, 'price': 25, 'currency': 'USD',
+        })
+        public = {'date': '2025-10-17', 'ticker': 'ABC', 'action': 'BUY', 'note': ''}
+        self.assertEqual(public_activity([account]), [public])
+        event['journal'] = {'note': 'My reason', 'published': False}
+        self.assertEqual(public_activity([account]), [public])
+        event['journal']['published'] = True
+        self.assertEqual(public_activity([account]), [{**public, 'note': 'My reason'}])
+
+    def test_private_dashboard_document_is_not_cached(self):
+        response = app.test_client().get('/')
+        with response:
+            self.assertEqual(response.headers['Cache-Control'], 'no-store')
+            self.assertIn('id="private-realized"', response.get_data(as_text=True))

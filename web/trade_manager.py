@@ -141,7 +141,7 @@ def record_trade(source, incoming):
     if not reference and any(t.get('trade_fingerprint') == fingerprint
                              for t in data.get('transactions', [])):
         raise ValueError('Matching transaction exists. Use distinct broker references for identical fills.')
-    event.update(fee_original=float(original_fee), fee_currency=fee_currency,
+    event.update(activity_public=action in ('BUY', 'SELL'), fee_original=float(original_fee), fee_currency=fee_currency,
                  fee_exchange_rate=float(fee_rate), trade_fingerprint=fingerprint, position_quantity_after=float(new_q),
                  broker_reference=reference or None, source='manual_private_dashboard', fee_in_quote_currency=float(fee),
                  realized_gain_in_quote_currency=float(round(realized, 2)) if realized is not None else None,
@@ -194,12 +194,14 @@ def correct_trade(source, incoming):
     data['transactions'] = deepcopy(events[:target])
     data['positions_as_of'] = original['prior_positions_as_of']
     data, replacement = record_trade(data, incoming)
+    replacement['activity_public'] = original.get('activity_public') is True
     if 'journal' in original:
         replacement['journal'] = {**original['journal'], 'published': False}
     for trade in tail[1:]:
         data, replayed = record_trade(data, {**trade['request'],
                                      'account': incoming['account'],
                                      'client_trade_id': trade['event_id']})
+        replayed['activity_public'] = trade.get('activity_public') is True
         if 'journal' in trade:
             replayed['journal'] = deepcopy(trade['journal'])
     data.setdefault('trade_audit', []).append({**deepcopy(original),
