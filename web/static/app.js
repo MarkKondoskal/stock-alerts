@@ -19,11 +19,12 @@ async function loadOverview(){
   // Older UI versions loaded portfolio/marks_portfolio.json instead.
   return window.loadPrivateHoldings();
 }
-async function loadWorkflows(){const runs=await api('/api/workflows');$('#workflow-list').innerHTML=runs.map(x=>{const status=x.status==='completed'?(x.conclusion||'completed'):x.status;const cls=['success','neutralized'].includes(status)?'good':(['failure','cancelled','timed_out'].includes(status)?'bad':'');return `<div class="workflow"><div><b>${x.name||x.path||'Workflow'}</b><small>${new Date(x.created_at).toLocaleString()} · ${x.event||'run'} · <a href="${x.html_url}" target="_blank" rel="noopener" style="color:#a5b4fc">View run ↗</a></small></div><span class="pill ${cls}">${status}</span></div>`}).join('')||'<p class="muted">No workflow runs returned.</p>'}
+async function loadWorkflows(){const [runs]=await Promise.all([api('/api/workflows'),window.loadSystemHealth()]);$('#workflow-list').innerHTML=runs.map(x=>{const status=x.status==='completed'?(x.conclusion||'completed'):x.status;const cls=['success','neutralized'].includes(status)?'good':(['failure','cancelled','timed_out'].includes(status)?'bad':'');return `<div class="workflow"><div><b>${x.name||x.path||'Workflow'}</b><small>${new Date(x.created_at).toLocaleString()} · ${x.event||'run'} · <a href="${x.html_url}" target="_blank" rel="noopener" style="color:#a5b4fc">View run ↗</a></small></div><span class="pill ${cls}">${status}</span></div>`}).join('')||'<p class="muted">No workflow runs returned.</p>'}
 $('#login-form').onsubmit=async e=>{e.preventDefault();password=$('#password').value;await connect()};$('#sync').onclick=async()=>{if(!password)return toast('Connect first.','error');try{await Promise.all([loadOverview(),loadWatchlist(),loadWorkflows()]);toast('Synced current repository state.')}catch(e){toast(e.message,'error')}};document.querySelectorAll('.tab').forEach(b=>b.onclick=async()=>{if(!password)return;showTab(b.dataset.tab);try{if(b.dataset.tab==='watchlist')await loadWatchlist();if(b.dataset.tab==='workflows')await loadWorkflows();if(b.dataset.tab==='trades')await Promise.all([loadTrades(),loadTradeHistory()]);if(b.dataset.tab==='sentiment')await window.StockSentiment?.load('private')}catch(e){toast(e.message,'error')}});$('#reload-overview').onclick=()=>loadOverview().catch(e=>toast(e.message,'error'));$('#reload-workflows').onclick=()=>loadWorkflows().catch(e=>toast(e.message,'error'));$('#save-watchlist').onclick=saveWatchlist;$('#add-ticker').onclick=()=>{const t=prompt('Ticker symbol (e.g. MA):');if(!t)return;const ticker=t.trim().toUpperCase();if(!/^[A-Z0-9.^_-]{1,20}$/.test(ticker))return toast('Ticker contains unsupported characters.','error');if(watchlist[ticker])return toast('Ticker already exists.','error');watchlist[ticker]={price_targets:[],valuation_targets:{}};renderWatchlist()};$('#dispatch').onclick=async()=>{const workflow=$('#workflow-select').value;if(workflow==='watchlist_manager.yml'){toast('For now, edit targets in Watchlist & Alerts. The manager workflow requires action/ticker/target inputs, which are not exposed in this simple dispatch button.','error');return}try{const d=await api('/api/workflows/dispatch',{method:'POST',body:JSON.stringify({workflow})});toast(d.message);setTimeout(()=>loadWorkflows().catch(()=>{}),2500)}catch(e){toast(e.message,'error')}};$('#discord-test').onclick=async()=>{try{const d=await api('/api/discord/test',{method:'POST',body:'{}'});toast(d.message)}catch(e){toast(e.message,'error')}};$('#logout').onclick=()=>{password='';sessionStorage.removeItem('dashboardPassword');$('#password').value='';connected(false);toast('Disconnected this browser.')};
 if(password){$('#password').value=password;connect() }else connected(false);
 
 let accountSnapshots={};
+let correctingTrade=null;
 async function loadTrades(){
   accountSnapshots=await api('/api/private/accounts');
   const account=$('#trade-account').value;
@@ -47,6 +48,20 @@ function previewTrade(){
   const action=$('#trade-action').value;
   const ticker=$('#trade-ticker').value.trim().toUpperCase();
   const ccy=$('#trade-currency').value;
+  const split=action==='SPLIT';
+  $('#trade-quantity-label').textContent=split?'New shares per old share':'Shares';
+  $('#trade-price-label').hidden=split;
+  $('#trade-price').required=!split;
+  $('#trade-fee').disabled=split;
+  $('#trade-fee-currency-label').hidden=split;
+  const feeCurrency=$('#trade-fee-currency').value;
+  const crossFee=!split&&Number($('#trade-fee').value)>0&&feeCurrency&&feeCurrency!==ccy;
+  $('#trade-fee-rate-label').hidden=!crossFee;
+  $('#trade-fee-rate').required=Boolean(crossFee);
+  if(split){
+    $('#trade-preview').textContent='Split ' + (ticker||'—') + ' · ' + quantity + ' new shares per old share';
+    return;
+  }
   const value=quantity>0&&price>0&&Number.isFinite(quantity*price)?
     new Intl.NumberFormat('en-US',{style:'currency',currency:ccy}).format(quantity*price):'—';
   const held=accountSnapshots[account]?.positions?.find(x=>x.ticker===ticker)?.quantity||0;
@@ -55,12 +70,47 @@ function previewTrade(){
 }
 async function loadTradeHistory(){
   const d=await api('/api/private/trades');
-  $('#trade-history-rows').innerHTML=(d.transactions||[]).map(t=>`<tr><td>${esc(t.date)}</td><td>${t.account==='us'?'Merrill':'Nordnet'}</td><td>${esc(t.action)}</td><td class="ticker">${esc(t.ticker)}</td><td>${fmt(t.quantity,4)}</td><td>${esc(t.currency)} ${fmt(t.price)}</td></tr>`).join('')||'<tr><td colspan="6">No manual trades recorded yet. Historical broker imports remain in the underlying private ledgers.</td></tr>';
+  const tbody=$('#trade-history-rows');
+  tbody.replaceChildren();
+  for(const t of d.transactions||[]){
+    const row=tbody.insertRow();
+    for(const value of [t.date,t.account==='us'?'Merrill':'Nordnet',t.action,t.ticker,
+      t.split_ratio ?? t.quantity,t.action==='SPLIT'?'—':t.currency+' '+fmt(t.price),
+      t.fee==null?'—':t.currency+' '+fmt(t.fee),t.realized==null?'—':t.currency+' '+fmt(t.realized)]){
+      row.insertCell().textContent=value;
+    }
+    const cell=row.insertCell();
+    if(t.correctable){
+      const button=document.createElement('button');
+      button.type='button';
+      button.textContent='Correct';
+      button.className='ghost';
+      button.onclick=()=>selectCorrection(t);
+      cell.append(button);
+    }
+  }
   $('#trade-history-note').textContent=`${d.count||0} manually recorded transactions in private ledger · showing latest 30`;
 }
+function selectCorrection(trade){
+  correctingTrade=trade;
+  $('#trade-correction').hidden=!trade;
+  $('#trade-account').disabled=Boolean(trade);
+  if(!trade){previewTrade();return;}
+  for(const field of ['account','ticker','date','action','currency']) $('#trade-'+field).value=trade[field];
+  $('#trade-quantity').value=trade.split_ratio??trade.quantity;
+  $('#trade-price').value=trade.action==='SPLIT'?'':trade.price;
+  $('#trade-fee').value=trade.fee_original??trade.fee??0;
+  $('#trade-fee-currency').value=trade.fee_currency??'';
+  $('#trade-fee-rate').value=trade.fee_exchange_rate??'';
+  $('#trade-reference').value=trade.broker_reference??'';
+  $('#trade-correction-note').textContent='Correcting '+trade.ticker+' on '+trade.date;
+  previewTrade();
+  $('#trade-form').scrollIntoView({block:'start'});
+}
+$('#trade-cancel-correction').onclick=()=>selectCorrection(null);
 $('#trade-account').onchange=()=>loadTrades().catch(e=>toast(e.message,'error'));
 $('#trade-ticker').addEventListener('input',chooseTradeCurrency);
-for (const name of ['#trade-quantity','#trade-price','#trade-action','#trade-currency']) $(name).addEventListener('input',previewTrade);
+for (const name of ['#trade-quantity','#trade-price','#trade-action','#trade-currency','#trade-fee','#trade-fee-currency','#trade-fee-rate']) $(name).addEventListener('input',previewTrade);
 $('#trade-refresh').onclick=()=>loadTrades().catch(e=>toast(e.message,'error'));
 $('#trade-history-refresh').onclick=()=>loadTradeHistory().catch(e=>toast(e.message,'error'));
 const initialTradeDate=new Date();while(initialTradeDate.getDay()===0||initialTradeDate.getDay()===6)initialTradeDate.setDate(initialTradeDate.getDate()-1);
@@ -68,9 +118,17 @@ $('#trade-date').value=[initialTradeDate.getFullYear(),String(initialTradeDate.g
 $('#trade-form').onsubmit=async event=>{
   event.preventDefault();
   const payload={account:$('#trade-account').value,action:$('#trade-action').value,ticker:$('#trade-ticker').value.trim().toUpperCase(),date:$('#trade-date').value,quantity:$('#trade-quantity').value,price:$('#trade-price').value,currency:$('#trade-currency').value};
-  const amount=Number(payload.quantity)*Number(payload.price);
+  const split=payload.action==='SPLIT';
+  if(split) payload.price='';
+  payload.fee=split?'0':$('#trade-fee').value;
+  payload.fee_currency=split?'':$('#trade-fee-currency').value;
+  payload.fee_exchange_rate=$('#trade-fee-rate').required?$('#trade-fee-rate').value:'';
+  payload.broker_reference=$('#trade-reference').value.trim();
+  if(correctingTrade) payload.corrects=correctingTrade.event_id;
+  const amount=Number(payload.quantity)*(split?1:Number(payload.price));
   if(!payload.ticker||!Number.isFinite(amount)||amount<=0)return toast('Enter valid ticker, shares and price.','error');
-  if(!confirm(`Record ${payload.action} ${payload.quantity} ${payload.ticker} at ${payload.price} ${payload.currency} in ${payload.account.toUpperCase()} on ${payload.date}? This commits to your PRIVATE GitHub account. It does not place a brokerage order.`))return;
+  const details=split?'split ratio '+payload.quantity:payload.quantity+' shares at '+payload.price+' '+payload.currency+' with fee '+(payload.fee||'0');
+  if(!confirm((correctingTrade?'Correct ':'Record ')+payload.action+' '+payload.ticker+' · '+details+' · '+payload.date+'?'))return;
   // Retain the same ID if a request times out and the user retries unchanged.
   const fingerprint=JSON.stringify(payload);
   let pending;
@@ -81,6 +139,7 @@ $('#trade-form').onsubmit=async event=>{
   try{
     const result=await api('/api/private/trades',{method:'POST',body:JSON.stringify(payload)});
     sessionStorage.removeItem('pendingTrade');
+    selectCorrection(null);
     $('#trade-status').textContent=result.message;
     toast(result.message);
     await Promise.all([loadTrades(),loadTradeHistory(),loadOverview()]);

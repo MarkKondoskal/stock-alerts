@@ -24,7 +24,7 @@ except ImportError as e:
 
 WEBHOOK_URL = os.environ.get("DISCORD_PORTFOLIO_WEBHOOK")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PORTFOLIO_FILE = os.path.join(BASE_DIR, "marks_portfolio.json")
+PORTFOLIO_FILE = os.getenv("LEGACY_PORTFOLIO_FILE") or os.path.join(BASE_DIR, "marks_portfolio.json")
 # Remembers which earnings were already posted so the hourly schedule doesn't repeat them.
 STATE_FILE = os.path.join(BASE_DIR, "earnings_state.json")
 

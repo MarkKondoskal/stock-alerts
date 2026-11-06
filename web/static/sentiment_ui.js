@@ -100,6 +100,7 @@
     const el = blocks(id);
     if (!el || state[id].loading) return;
     if (state[id].loaded && !force) return;
+    window.loadEconomicCalendar?.(id);
     state[id].loading = true;
     const button = el.querySelector('.sentiment-refresh');
     button.disabled = true;

@@ -438,6 +438,7 @@
                         <div id="spyFullPeriod" class="spy-full-period" hidden></div>
                     </div>
                     <p id="performanceNote" class="analytics-note">Loading historical prices…</p>
+    <div id="advanced-public" aria-live="polite"></div>
                 </div>
                 <div class="analytics-card">
                     <div class="analytics-head"><h2 class="analytics-title">Holdings allocation</h2></div>
@@ -470,15 +471,12 @@
                             <tr>
                                 <th>Ticker</th>
                                 <th>Sector</th>
-                                <th>Cost / Share</th>
-                                <th>Latest Price</th>
                                 <th>Allocation</th>
-                                <th id="holdingReturnHeader">Return</th>
                             </tr>
                         </thead>
                         <tbody id="holdingsBody">
                             <tr>
-                                <td colspan="6" class="public-empty">
+                                <td colspan="3" class="public-empty">
                                     Loading holdings…
                                 </td>
                             </tr>
@@ -540,6 +538,7 @@
         <section id="sentimentPanel" class="public-panel" role="tabpanel"
             aria-labelledby="sentimentTab" hidden>
             <div id="sentiment-public" class="sentiment-root"></div>
+    <div id="calendar-public" class="sentiment-root" aria-live="polite"></div>
         </section>
 
         <footer class="public-footer">
@@ -547,7 +546,7 @@
         </footer>
     </main>
 
-    <script src="/static/public.js?v=sentiment-macro-fix-20261024-2" defer></script>
-    <script src="/static/sentiment_ui.js?v=sentiment-macro-fix-20261024-2" defer></script>
+    <script src="/static/stock_upgrades.js?v=1" defer></script><script src="/static/public.js?v=stock-upgrades-1" defer></script>
+    <script src="/static/sentiment_ui.js?v=stock-upgrades-1" defer></script>
 </body>
 </html>

@@ -134,14 +134,17 @@ def check_prices():
     watchlist = load_watchlist()
     if not watchlist:
         print("No tickers found in watchlist.")
-        return
+        return False
 
     # Check tickers with either price or valuation targets.
     symbols = [symbol for symbol, entry in watchlist.items()
                if entry["price_targets"] or entry["valuation_targets"]]
     if not symbols:
         print("No active price or valuation targets to check.")
-        return
+        try:
+            return _positive_number(yf.Ticker('SPY').fast_info.last_price) is not None
+        except Exception:
+            return False
 
     try:
         data = yf.Tickers(" ".join(symbols))
@@ -150,6 +153,7 @@ def check_prices():
 
     updated = {}
     changed = False
+    complete = True
     for symbol, entry in watchlist.items():
         price_targets = list(entry["price_targets"])
         valuation_targets = entry["valuation_targets"]
@@ -162,6 +166,7 @@ def check_prices():
             fast = ticker.fast_info
             current_price = _positive_number(getattr(fast, "last_price", None)) or _positive_number(getattr(fast, "lastPrice", None))
             day_low = _positive_number(getattr(fast, "day_low", None)) or _positive_number(getattr(fast, "dayLow", None))
+            complete = complete and current_price is not None
             check_price = day_low or current_price
             remaining_prices = []
             for target in price_targets:
@@ -204,6 +209,7 @@ def check_prices():
             if remaining_prices or remaining_valuations:
                 updated[symbol] = {"price_targets": remaining_prices, "valuation_targets": remaining_valuations}
         except Exception as exc:
+            complete = False
             print(f"Error processing {symbol}; preserving undelivered targets: {exc}")
             # Drop only the price targets that were already delivered so they are
             # not sent again; everything else (including unprocessed targets) stays.
@@ -216,8 +222,9 @@ def check_prices():
 
     if changed:
         save_watchlist(updated)
+    return complete
 
 
 if __name__ == "__main__":
     print("Checking stock prices...")
-    check_prices()
+    raise SystemExit(0 if check_prices() else 1)

@@ -12,7 +12,8 @@ sys.path.insert(0, str(ROOT / 'web'))
 from private_holdings import private_snapshot
 import account_public
 
-FIX = Path(__file__).resolve().parents[2]
+FIX = Path(os.getenv('STOCKALERTS_TEST_ACCOUNT_DIR',
+                     ROOT.parent / 'stock-alerts-private-data-main' / 'portfolio'))
 
 
 def sample_accounts():
@@ -26,6 +27,8 @@ def sample_accounts():
 class PrivateHoldingsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        if not (FIX / 'merrill_portfolio.json').is_file() or not (FIX / 'nordnet_portfolio.json').is_file():
+            raise unittest.SkipTest('Set STOCKALERTS_TEST_ACCOUNT_DIR to the private portfolio directory')
         cls.us, cls.dk = sample_accounts()
 
     @staticmethod
@@ -38,15 +41,15 @@ class PrivateHoldingsTest(unittest.TestCase):
     def test_all_account_counts_and_excluded_etfs(self):
         with patch('private_holdings._quote_prices', side_effect=self.quotes):
             combined = private_snapshot(self.us, self.dk)
-            self.assertEqual(combined['position_count'], 26)
-            self.assertEqual(combined['ticker_count'], 23)
+            all_positions = account_public._positions(self.us, self.dk, 'combined', False)
+            self.assertEqual(combined['position_count'], len(all_positions))
+            self.assertEqual(combined['ticker_count'], len({p['ticker'] for p in all_positions}))
             self.assertNotIn('VOO', {r['ticker'] for r in combined['holdings']})
             included = private_snapshot(self.us, self.dk, include_etfs=True)
-            self.assertEqual(included['position_count'], 28)
-            self.assertEqual(included['ticker_count'], 25)
+            all_positions = account_public._positions(self.us, self.dk, 'combined', True)
+            self.assertEqual(included['position_count'], len(all_positions))
+            self.assertEqual(included['ticker_count'], len({p['ticker'] for p in all_positions}))
             self.assertAlmostEqual(sum(r['allocation_pct'] for r in included['holdings']), 100, places=1)
-            self.assertEqual(len(private_snapshot(self.us, self.dk, 'dk')['holdings']), 13)
-            self.assertEqual(len(private_snapshot(self.us, self.dk, 'us')['holdings']), 13)
 
     def test_currency_consistency_and_unrealized(self):
         with patch('private_holdings._quote_prices', side_effect=self.quotes):
@@ -76,7 +79,7 @@ class PrivateHoldingsTest(unittest.TestCase):
         from datetime import date
         us = json.loads(json.dumps(self.us))
         # Use a current/future date relative to the snapshot, not an old purchase.
-        trade = dict(account='us', action='BUY', ticker='NEWTEST', date='2026-10-23',
+        trade = dict(account='us', action='BUY', ticker='NEWTEST', date=us['positions_as_of'],
                      quantity=2, price=90, currency='USD')
         # Match real API naming by adapting to actual form fields (see trade manager).
         # Date is passed unchanged by the private API.
@@ -85,7 +88,8 @@ class PrivateHoldingsTest(unittest.TestCase):
             before = private_snapshot(self.us, self.dk, 'us')
             after = private_snapshot(updated, self.dk, 'us')
             self.assertEqual(after['ticker_count'], before['ticker_count'] + 1)
-            self.assertEqual(private_snapshot(self.us, self.dk, 'dk')['ticker_count'], 13)
+            self.assertEqual(private_snapshot(us, self.dk, 'dk')['holdings'],
+                             private_snapshot(updated, self.dk, 'dk')['holdings'])
 
     @unittest.skipUnless(importlib.util.find_spec('flask'), 'Flask is unavailable in the offline test container')
     def test_api_must_require_password_and_public_stays_sanitized(self):

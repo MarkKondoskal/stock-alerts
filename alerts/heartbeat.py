@@ -12,7 +12,7 @@ DISCORD_WEBHOOK_URL = (
 def send_heartbeat():
     if not DISCORD_WEBHOOK_URL:
         print("Error: No Discord webhook URL found in environment.")
-        return
+        return False
 
     payload = {
         "username": "Stock Monitor",
@@ -31,10 +31,12 @@ def send_heartbeat():
         response = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=15)
         if response.status_code in [200, 204]:
             print("Heartbeat sent successfully.")
-        else:
-            print(f"Failed to send heartbeat: {response.status_code}, {response.text}")
-    except Exception as e:
-        print(f"Error sending heartbeat: {e}")
+            return True
+        print(f"Discord heartbeat failed with HTTP {response.status_code}")
+    except requests.RequestException:
+        print("Discord heartbeat request failed")
+    return False
+
 
 if __name__ == "__main__":
-    send_heartbeat()
+    raise SystemExit(0 if send_heartbeat() else 1)

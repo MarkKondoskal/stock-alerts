@@ -271,12 +271,12 @@ def check_fred_series(
     series_id: str,
     name: str,
     state: dict,
-) -> None:
+) -> bool | None:
 
     latest = fetch_fred_series(series_id)
 
     if latest is None:
-        return
+        return False
 
     latest_date = latest["date"]
     latest_value = latest["value"]
@@ -659,7 +659,7 @@ def fetch_latest_fomc_statement() -> dict | None:
 # CHECK FEDERAL RESERVE
 # ============================================================
 
-def check_federal_reserve(state: dict) -> None:
+def check_federal_reserve(state: dict) -> bool | None:
     """
     Check the latest FOMC target range directly from the Fed.
 
@@ -670,7 +670,7 @@ def check_federal_reserve(state: dict) -> None:
     latest = fetch_latest_fomc_statement()
 
     if latest is None:
-        return
+        return False
 
     latest_date = latest["date"]
     latest_lower = latest["lower"]
@@ -829,13 +829,14 @@ def check_federal_reserve(state: dict) -> None:
 # MAIN
 # ============================================================
 
-def main() -> None:
+def main() -> bool:
 
     print("=" * 70)
     print("US ECONOMIC DATA MONITOR")
     print("=" * 70)
 
     state = load_state()
+    complete = True
 
     # --------------------------------------------------------
     # 1. FRED ECONOMIC DATA
@@ -847,13 +848,15 @@ def main() -> None:
 
         try:
 
-            check_fred_series(
+            result = check_fred_series(
                 series_id,
                 name,
                 state,
             )
+            complete = complete and result is not False
 
         except Exception as exc:
+            complete = False
 
             print(
                 f"❌ Error processing "
@@ -871,7 +874,7 @@ def main() -> None:
 
     try:
 
-        check_federal_reserve(state)
+        complete = (check_federal_reserve(state) is not False) and complete
 
     except Exception as exc:
 
@@ -892,6 +895,8 @@ def main() -> None:
     print("ECONOMIC MONITOR FINISHED")
     print("=" * 70)
 
+    return complete
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(0 if main() else 1)

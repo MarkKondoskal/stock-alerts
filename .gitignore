@@ -3,3 +3,7 @@ web/.env
 web/.venv/
 __pycache__/
 *.py[cod]
+
+# Private portfolio checkout and legacy local data
+/_private/
+/portfolio/marks_portfolio.json

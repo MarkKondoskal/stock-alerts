@@ -32,6 +32,8 @@ jobs:
 
       # --- 1. STOCK ALERTER ---
       - name: Run Stock Alerter Script
+        id: stock_quotes
+        continue-on-error: true
         env:
           DISCORD_STOCK_WEBHOOK: ${{ secrets.DISCORD_STOCK_WEBHOOK }}
         run: python alerts/stock_alert.py
@@ -45,3 +47,7 @@ jobs:
       # --- 3. AUTO-COMMIT UPDATES ---
       - name: Auto-commit Watchlist & Sentiment State
         run: bash .github/scripts/commit_and_push.sh "Auto-updated price targets and sentiment state" alerts/watchlist.json alerts/sentiment_state.json
+
+      - name: Report quote refresh failure
+        if: steps.stock_quotes.outcome == 'failure'
+        run: exit 1

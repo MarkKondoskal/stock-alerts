@@ -92,9 +92,11 @@ async function privateLoadPerformance(version){
     const requestId = ++privatePerformanceRequest;
     const {period}=privateHoldingsState;
     privateSet('private-performance-note','Loading historical performance…');
+    window.renderAdvanced?.('private');
     try{
         const result=await api('/api/private/holdings/analytics'+privateQuery(period));
         if(version!==privateHoldingsState.version||period!==privateHoldingsState.period||requestId!==privatePerformanceRequest)return;
+        window.renderAdvanced('private', result);
         const spy=new Map((result.spy||[]).map(p=>[p.date,Number(p.value)]));
         const aligned=(result.performance||[]).filter(p=>spy.has(p.date));
         if(aligned.length<2){privateEmptyChart('private-performance-chart');

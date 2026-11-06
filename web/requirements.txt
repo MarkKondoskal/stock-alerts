@@ -4,3 +4,5 @@ gunicorn>=22,<24
 python-dotenv>=1.0,<2.0
 yfinance>=0.2.50,<1
 pandas>=2.2,<3
+beautifulsoup4>=4.12,<5
+tzdata>=2025.1

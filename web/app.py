@@ -7,16 +7,19 @@ Private portfolio/watchlist JSON files live in GITHUB_DATA_REPOSITORY.
 Never expose GitHub tokens or Discord webhooks in browser code.
 """
 import base64
+import hmac
 import json
 import os
 from urllib.parse import quote
 
 import requests
-from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_from_directory
 
 # Load web/.env locally. Environment variables supplied by the host take precedence.
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
+if os.path.isfile(dotenv_path):
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path)
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 API = "https://api.github.com"
@@ -44,7 +47,7 @@ def require_auth():
         }), 503
 
     auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer ") or auth[7:] != cfg["password"]:
+    if not auth.startswith("Bearer ") or not hmac.compare_digest(auth[7:].encode(), cfg["password"].encode()):
         return jsonify({
             "error": "Unauthorized. Enter your dashboard password."
         }), 401
@@ -562,81 +565,18 @@ def public_dashboard():
 
 @app.get("/api/public/portfolio")
 def public_portfolio_get():
-    """Return a sanitized portfolio for public viewing."""
+    """Compatibility endpoint with a market-value percentage projection."""
     try:
-        portfolio, _ = get_file(
-            "portfolio/marks_portfolio.json",
-            data=True,
-        )
-
-        if not isinstance(portfolio, dict):
-            return jsonify({"error": "Invalid portfolio data."}), 502
-
-        positions = []
-        total_cost = 0.0
-
-        for ticker, item in portfolio.items():
-            if ticker == "closed_positions" or not isinstance(item, dict):
-                continue
-
-            try:
-                shares = float(item.get("shares", 0) or 0)
-                avg_price = float(item.get("avg_price", 0) or 0)
-            except (TypeError, ValueError):
-                continue
-
-            if shares <= 0 or avg_price < 0:
-                continue
-
-            cost_basis = shares * avg_price
-            total_cost += cost_basis
-
-            # Keep these values server-side; never return them.
-            positions.append({
-                "ticker": str(ticker).upper(),
-                "_cost_basis": cost_basis,
-                "avg_price": avg_price,
-            })
-
-        if total_cost > 0:
-            for position in positions:
-                position["allocation_pct"] = round(
-                    position["_cost_basis"] / total_cost * 100,
-                    2,
-                )
-
-        # Remove the private calculation field before responding.
-        public_positions = [
-            {
-                "ticker": p["ticker"],
-                "avg_price": p["avg_price"],
-                "allocation_pct": p.get("allocation_pct", 0),
-            }
-            for p in positions
-        ]
-
-        public_positions.sort(
-            key=lambda p: p["allocation_pct"],
-            reverse=True,
-        )
-
-        return jsonify({
-            "positions": public_positions,
-            "position_count": len(public_positions),
-            "allocation_basis": "recorded cost basis",
-            "note": (
-                "Allocation percentages are based on recorded cost basis, "
-                "not live market values. Share counts, total invested, "
-                "and dollar-denominated position values are not published."
-            ),
-        })
-
-    except (requests.RequestException, ValueError, KeyError,
-            TypeError, RuntimeError):
-        app.logger.exception("Could not load public portfolio")
-        return jsonify({
-            "error": "Could not load public portfolio data."
-        }), 502
+        from account_public import snapshot
+        us, dk = _account_documents()
+        data = snapshot(us, dk, 'combined', include_etfs=True)
+        positions = [{'ticker': row['ticker'], 'allocation_pct': row['allocation_pct']}
+                     for row in data['holdings']]
+        return jsonify({'positions': positions, 'position_count': len(positions),
+                        'allocation_basis': 'latest market value'})
+    except (requests.RequestException, ValueError, KeyError, TypeError, RuntimeError):
+        app.logger.exception('Could not load public portfolio')
+        return jsonify({'error': 'Could not load public portfolio data.'}), 502
 
 
 @app.get("/api/public/watchlist")
@@ -716,10 +656,22 @@ def _private_csv(path):
         "portfolio/performance/combined_2026_ytd_provisional.csv",
         "portfolio/performance/merrill_no_etf_2026_ytd_provisional.csv",
         "portfolio/performance/combined_no_etf_2026_ytd_provisional.csv",
+        "portfolio/performance/attribution_us.csv",
+        "portfolio/performance/attribution_us_excluded.csv",
+        "portfolio/performance/attribution_dk.csv",
+        "portfolio/performance/attribution_dk_excluded.csv",
+        "portfolio/performance/nordnet_no_etf_all_available_provisional.csv",
+        "portfolio/performance/attribution_combined.csv",
+        "portfolio/performance/attribution_combined_excluded.csv",
     ):
         raise ValueError("Unapproved private file path")
-    response = requests.get(repo_url(path, data=True), headers=gh_headers(), timeout=20)
+    headers = gh_headers()
+    if '/attribution_' in path:
+        headers['Accept'] = 'application/vnd.github.raw+json'
+    response = requests.get(repo_url(path, data=True), headers=headers, timeout=20)
     response.raise_for_status()
+    if '/attribution_' in path:
+        return response.content.decode('utf-8')
     return base64.b64decode(response.json()["content"]).decode("utf-8")
 
 
@@ -844,7 +796,7 @@ def private_holdings_analytics_get():
         from account_public import analytics
         us, dk = _account_documents()
         result = jsonify(analytics(us, dk, account, period, _private_csv,
-                                   currency=currency, include_etfs=(etfs == 'included')))
+                                   currency=currency, include_etfs=(etfs == 'included'), private=True))
         result.headers['Cache-Control'] = 'private, no-store'
         return result
     except Exception:
@@ -901,6 +853,14 @@ def private_trade_history():
                     'quantity':t.get('quantity'),
                     'price':t.get('price_usd') if account=='us' else t.get('execution_price_per_share'),
                     'currency':'USD' if account=='us' else t.get('price_currency'),
+                    'fee':t.get('fee_in_quote_currency'),
+                    'fee_original':t.get('fee_original'),
+                    'fee_currency':t.get('fee_currency'),
+                    'fee_exchange_rate':t.get('fee_exchange_rate'),
+                    'broker_reference':t.get('broker_reference'),
+                    'realized':t.get('realized_gain_in_quote_currency'),
+                    'split_ratio':t.get('split_ratio'),
+                    'correctable':'request' in t,
                 })
         events.sort(key=lambda e:(e['date'] or '',e['event_id'] or ''),reverse=True)
         response=jsonify({'transactions':events[:30],'count':len(events)})
@@ -918,23 +878,28 @@ def private_trade_add():
     if not request.is_json:return jsonify({'error':'Expected JSON request'}),400
     body=request.get_json(silent=True)
     try:
-        from trade_manager import FILES,record_trade
+        from trade_manager import FILES, canonical_request, correct_trade, prior_request, record_trade
         import uuid
-        if not isinstance(body,dict) or body.get('account') not in FILES:
+        if not isinstance(body,dict) or body.get('account') not in ('us', 'dk'):
             return jsonify({'error':'Select an account'}),400
         path=FILES[body['account']]
         source,sha=get_file(path,data=True)
         # Idempotent retry after a saved commit but a lost HTTP response.
         client_id=body.get('client_trade_id')
+        if client_id is None:
+            return jsonify({'error':'Transaction request ID is required'}),400
         if client_id is not None:
             try: client_id=str(uuid.UUID(str(client_id)))
             except (TypeError,ValueError,AttributeError):
                 return jsonify({'error':'Invalid transaction request ID'}),400
-            if any(t.get('event_id')==client_id for t in source.get('transactions',[])):
+            existing = prior_request(source, client_id)
+            if existing:
+                if existing.get('request') is not None and existing['request'] != canonical_request(body):
+                    return jsonify({'error':'Transaction request ID was already used with different details'}),409
                 return jsonify({'ok':True,'already_recorded':True,'event_id':client_id,
                                 'message':'This trade was already recorded. No duplicate created.',
                                 'recalculation_requested':False})
-        data,event=record_trade(source,body)
+        data,event=(correct_trade if body.get('corrects') else record_trade)(source,body)
         _,branch=repository_and_branch(data=True)
         encoded=base64.b64encode((json.dumps(data,indent=2,ensure_ascii=False)+'\n').encode()).decode()
         response=requests.put(repo_url(path,data=True),headers=gh_headers(),timeout=25,
@@ -971,6 +936,42 @@ def private_trade_add():
         app.logger.exception('Private trade save failed')
         return jsonify({'error':'Could not confirm the trade save. Check recent trades before retrying.'}),502
 
+
+
+@app.get('/api/private/system-health')
+def private_system_health_get():
+    error = require_auth()
+    if error:
+        return error
+    from system_health import dashboard
+
+    def runs(workflow, data):
+        _, branch = repository_and_branch(data=data)
+        response = requests.get(api_repo_url(f'actions/workflows/{workflow}/runs', data=data),
+                                headers=gh_headers(), timeout=8,
+                                params={'branch': branch, 'per_page': 50})
+        response.raise_for_status()
+        items = response.json()['workflow_runs']
+        if not any(item.get('conclusion') == 'success' for item in items):
+            response = requests.get(api_repo_url(f'actions/workflows/{workflow}/runs', data=data),
+                                    headers=gh_headers(), timeout=8,
+                                    params={'branch': branch, 'per_page': 1, 'status': 'success'})
+            response.raise_for_status()
+            items.extend(response.json()['workflow_runs'])
+        return items
+
+    response = jsonify(dashboard(runs, get_file))
+    response.headers['Cache-Control'] = 'private, no-store'
+    return response
+
+
+@app.get("/api/public/economic-calendar")
+def economic_calendar_get():
+    import time
+    from economic_calendar import calendar
+    response = jsonify(calendar(int(time.time() // 900)))
+    response.headers['Cache-Control'] = 'public, max-age=300'
+    return response
 
 
 @app.get("/api/public/sentiment")

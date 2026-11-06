@@ -170,30 +170,16 @@ function renderHoldings(payload) {
     elements.holdingsBody.innerHTML = holdings.length ? [...holdings]
         .sort((a,b) => (b.allocation_pct || 0) - (a.allocation_pct || 0))
         .map(h => holdingRow(h)).join("")
-        : `<tr><td colspan="6" class="public-empty">No holdings available.</td></tr>`;
+        : `<tr><td colspan="3" class="public-empty">No holdings available.</td></tr>`;
 }
 
 function holdingRow(h) {
     const allocation = h.allocation_pct == null ? null : Number(h.allocation_pct);
-    const currency = h.currency === "DKK" ? "DKK" : "USD";
-    const price = formatPrice(h.current_price, currency);
-    // Holdings table always shows return against recorded per-share cost,
-    // not the selectable period from the gainers/losers bar chart.
-    const cost = Number(h.cost_per_share ?? h.avg_price);
-    const current = Number(h.current_price);
-    const gain = Number.isFinite(cost) && cost > 0 &&
-        h.current_price !== null && h.current_price !== undefined &&
-        Number.isFinite(current) ? (current / cost - 1) * 100 : null;
-    const gainText = gain === null ? "—" : `${gain > 0 ? "+" : ""}${formatNumber(gain)}%`;
-    const gainClass = gain > 0 ? "return-positive" : gain < 0 ? "return-negative" : "";
     return `<tr>
         <td class="public-ticker">${escapeHtml(h.ticker || "—")}</td>
         <td>${escapeHtml(h.sector || "—")}</td>
-        <td class="public-number">${formatPrice(h.cost_per_share ?? h.avg_price, currency)}</td>
-        <td class="public-number">${price}</td>
         <td><div class="public-allocation"><span class="public-number">${allocation === null ? "—" : `${formatNumber(allocation)}%`}</span>
             <div class="public-allocation-track"><div class="public-allocation-fill" style="width:${Math.max(0, Math.min(100,allocation || 0))}%"></div></div></div></td>
-        <td class="public-number ${gainClass}">${gainText}</td>
     </tr>`;
 }
 
@@ -511,9 +497,11 @@ async function updatePerformance() {
     const note = document.getElementById("performanceNote");
     document.getElementById("performancePeriodLabel").textContent = period === "ALL" ? "All" : period;
     note.textContent = "Loading market history…";
+    window.renderAdvanced?.("public");
     try {
         const info = await analyticsFor(period, account);
         if (period !== performancePeriod || generation !== accountGeneration || currencyAtRequest !== selectedCurrency) return;
+        window.renderAdvanced('public', info);
         const spy = new Map((info.spy || []).map(p => [p.date, p.value]));
         const aligned = (info.performance || []).filter(p => spy.has(p.date));
         const fullPeriodElement = document.getElementById("spyFullPeriod");
@@ -657,7 +645,7 @@ async function loadFixedAllocation() {
         console.error("Could not load fixed allocation:", error);
         if (requestId === snapshotRequestId) {
             setAccountStatus(`Could not load ${ACCOUNT_LABELS[account]} holdings. Try Refresh data.`);
-            elements.holdingsBody.innerHTML = `<tr><td colspan="6" class="public-empty">Current holdings unavailable. Refresh to retry.</td></tr>`;
+            elements.holdingsBody.innerHTML = `<tr><td colspan="3" class="public-empty">Current holdings unavailable. Refresh to retry.</td></tr>`;
         }
     }
 }

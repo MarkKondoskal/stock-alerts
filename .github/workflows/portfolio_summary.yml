@@ -32,8 +32,25 @@ jobs:
       contents: write
 
     steps:
+      - name: Verify private repository is configured
+        env:
+          DATA_REPOSITORY: ${{ vars.STOCKALERTS_DATA_REPOSITORY }}
+          GH_TOKEN: ${{ secrets.STOCKALERTS_DATA_TOKEN }}
+        run: |
+          test -n "$DATA_REPOSITORY" && test -n "$GH_TOKEN"
+          test "$(gh api "repos/$DATA_REPOSITORY" --jq .private)" = true
+
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Checkout private portfolio repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.STOCKALERTS_DATA_REPOSITORY }}
+          ref: ${{ vars.STOCKALERTS_DATA_BRANCH || 'main' }}
+          token: ${{ secrets.STOCKALERTS_DATA_TOKEN }}
+          path: _private
+          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -47,16 +64,29 @@ jobs:
 
       - name: Execute Portfolio Action
         env:
+          LEGACY_PORTFOLIO_FILE: _private/portfolio/marks_portfolio.json
           DISCORD_PORTFOLIO_WEBHOOK: ${{ secrets.DISCORD_PORTFOLIO_WEBHOOK }}
+          ACTION: ${{ inputs.action }}
+          TICKER: ${{ inputs.ticker }}
+          SHARES: ${{ inputs.shares }}
+          PRICE: ${{ inputs.price }}
         run: |
-          if [ "${{ github.event.inputs.action }}" = "STATUS" ]; then
+          if [ "$ACTION" = "STATUS" ]; then
             python portfolio/marks_portfolio_update.py STATUS
           else
-            python portfolio/marks_portfolio_update.py ${{ github.event.inputs.action }} ${{ github.event.inputs.ticker }} ${{ github.event.inputs.shares }} ${{ github.event.inputs.price }}
+            python portfolio/marks_portfolio_update.py "$ACTION" "$TICKER" "$SHARES" "$PRICE"
           fi
 
-      - name: Auto-commit Portfolio Changes
-        if: github.event.inputs.action != 'STATUS'
+      - name: Auto-commit portfolio changes to the private repository
+        if: inputs.action != 'STATUS'
+        working-directory: _private
         env:
-          COMMIT_MSG: "Update portfolio: ${{ github.event.inputs.action }} ${{ github.event.inputs.ticker }}"
-        run: bash .github/scripts/commit_and_push.sh "$COMMIT_MSG" portfolio/marks_portfolio.json
+          DATA_BRANCH: ${{ vars.STOCKALERTS_DATA_BRANCH || 'main' }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- portfolio/marks_portfolio.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Update private legacy portfolio'
+            git push origin "HEAD:$DATA_BRANCH"
+          fi

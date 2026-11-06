@@ -1,6 +1,7 @@
 name: US Market Open Heartbeat
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: '30 9 * * 1-5'
       timezone: "America/New_York"

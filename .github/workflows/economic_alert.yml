@@ -28,6 +28,8 @@ jobs:
           pip install requests
 
       - name: Run economic data monitor
+        id: economic_fetch
+        continue-on-error: true
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           # Reuse the sentiment webhook for economic alerts
@@ -37,3 +39,7 @@ jobs:
 
       - name: Commit & push state updates
         run: bash .github/scripts/commit_and_push.sh "Update economic data state" alerts/economic_state.json
+
+      - name: Report economic fetch failure
+        if: steps.economic_fetch.outcome == 'failure'
+        run: exit 1

@@ -74,40 +74,26 @@ def snapshot(us,dk,account,currency="USD",include_etfs=False):
             if price is None:
                 missing.add(ticker)
                 continue
-            # Yahoo quote currency: Nordnet's NOVO-B.CO is DKK; others here USD.
-            quote_currency='DKK' if ticker=='NOVO-B.CO' else 'USD'
+            quote_currency='DKK' if ticker.endswith('.CO') else 'USD'
             if fx is None:
                 raise ValueError('USD/DKK exchange rate unavailable; cannot compute combined allocations')
             multiplier=(1 if quote_currency=='USD' else 1/fx) if currency=='USD' else (fx if quote_currency=='USD' else 1)
             if multiplier is None:raise ValueError('USD/DKK exchange rate unavailable')
             amount=p['quantity']*price*multiplier
             row=holdings.setdefault(ticker,{'ticker':ticker,'sector':p['sector'],'market_value_private':0,
-                                            'cost_basis_private':0,'quantity_private':0,'currency':currency,
-                                            'latest':price*multiplier,'accounts':set()})
+                                            'currency':currency})
             row['market_value_private']+=amount
-            row['quantity_private']+=p['quantity']
-            # Brokerage cost and market quote must be in the same currency for per-share return.
-            if p['cost'] is not None:
-                cost_in_quote=p['cost'] if p['currency']==quote_currency else (p['cost']*fx if p['currency']=='DKK' else p['cost']/fx) if fx else None
-                if cost_in_quote is not None:row['cost_basis_private']+=p['quantity']*cost_in_quote*multiplier
-            row['accounts'].add(p['account'])
             sector_values[p['sector']]+=amount
         total=sum(row['market_value_private'] for row in holdings.values())
         result=[]
         for row in holdings.values():
-            qty=row['quantity_private']; cost=row['cost_basis_private']/qty if qty and row['cost_basis_private']>0 else None
             result.append({'ticker':row['ticker'],'sector':row['sector'],
-                           'cost_per_share':round(cost,2) if cost else None,
-                           'current_price':round(row['latest'],2),
                            'currency':row['currency'],
-                           'allocation_pct':round(100*row['market_value_private']/total,2) if total else None,
-                           'return_since_cost_pct':round((row['latest']/cost-1)*100,2) if cost else None})
+                           'allocation_pct':round(100*row['market_value_private']/total,2) if total else None})
         for ticker in sorted(missing):
             if ticker not in holdings:
                 item = next(p for p in positions if p['ticker']==ticker)
-                result.append({'ticker':ticker,'sector':item['sector'],'cost_per_share':None,
-                               'current_price':None,'currency':currency,'allocation_pct':None,
-                               'return_since_cost_pct':None})
+                result.append({'ticker':ticker,'sector':item['sector'],'currency':currency,'allocation_pct':None})
         result.sort(key=lambda x: (x['allocation_pct'] is None,-(x['allocation_pct'] or 0)))
         return {'holdings':result,'sectors':[{'sector':s,'allocation_pct':round(100*v/total,2)} for s,v in sorted(sector_values.items(),key=lambda x:-x[1])] if total else [],
                 'basis':'latest market value','missing_tickers':sorted(missing),
@@ -181,7 +167,8 @@ def _convert_series(rows, from_currency, to_currency, fx):
     return out
 
 
-def analytics(us,dk,account,period,read_csv,currency='USD',include_etfs=False):
+def analytics(us,dk,account,period,read_csv,currency='USD',include_etfs=False,private=False):
+    from advanced_analytics import attribution, risk_metrics
     if period not in PERIODS or currency not in ('USD','DKK'):
         raise ValueError('Invalid analytics period or currency')
     positions=_positions(us,dk,account,include_etfs)
@@ -215,6 +202,12 @@ def analytics(us,dk,account,period,read_csv,currency='USD',include_etfs=False):
             rows=[]
             note='ETF-excluded historical returns are not published yet. Run ETF Excluded Performance Reconstruction in the private repository.'
     else:
+        if not include_etfs and any(t.get('ticker') in ETF_TICKERS for t in dk.get('transactions', [])):
+            try:
+                nordnet = list(csv.DictReader(io.StringIO(read_csv(
+                    'portfolio/performance/nordnet_no_etf_all_available_provisional.csv'))))
+            except (ValueError, KeyError, RuntimeError, OSError, requests.RequestException):
+                nordnet = []
         raw=[(r['date'],_num(r.get('portfolio_pct')),benchmark.get(r['date'])) for r in nordnet]
         raw=[r for r in raw if r[1] is not None and r[2] is not None]
         rows=_convert_series(raw,'DKK',currency,fx)
@@ -223,7 +216,16 @@ def analytics(us,dk,account,period,read_csv,currency='USD',include_etfs=False):
     performance=_select_period(sorted(rows),period)
     gainers=_cached(('gainers',account,period,include_etfs,tuple(sorted(p['ticker'] for p in positions))),
                     lambda:_gainers(positions,period),600)
-    return {'period':period,'account':account,'currency':currency,'include_etfs':include_etfs,
+    advanced = risk_metrics(performance)
+    mode = account + ('_excluded' if not include_etfs else '')
+    advanced['contributions'] = []
+    if performance:
+        try:
+            advanced['contributions'] = attribution(
+                read_csv(f'portfolio/performance/attribution_{mode}.csv'), performance, currency, private)
+        except (ValueError, KeyError, RuntimeError, OSError, requests.RequestException):
+            pass
+    return {'advanced':advanced, 'period':period,'account':account,'currency':currency,'include_etfs':include_etfs,
             'performance':[{'date':p['date'],'value':p['portfolio']} for p in performance],
             'spy':[{'date':p['date'],'value':p['spy']} for p in performance],
             'gainers':gainers,'performance_note':note,
