@@ -20,7 +20,7 @@ class TradeJournalTest(unittest.TestCase):
         second = dict(ticker='XYZ', date='2026-10-21', action='SELL', event_id='private-id',
                       journal={'note': 'Private note', 'published': False})
         account = {'transactions': [first, second]}
-        public_first = {'date': '2026-10-20', 'ticker': 'ABC', 'action': 'BUY', 'position_change': 'New holding', 'note': ''}
+        public_first = {'date': '2026-10-20', 'ticker': 'ABC', 'action': 'BUY', 'position_change': 'New holding', 'note': '', 'buy_price': 321, 'buy_currency': 'USD'}
         public_second = {'date': '2026-10-21', 'ticker': 'XYZ', 'action': 'SELL', 'position_change': None, 'note': ''}
         default_activity = {'trades': [public_second, public_first]}
         key = next(journal_trades(account))[0]
@@ -33,6 +33,9 @@ class TradeJournalTest(unittest.TestCase):
             client = app.test_client()
             self.assertEqual(client.patch('/api/private/trades/journal', json=body).status_code, 401)
             self.assertEqual(client.get('/api/public/trade-activity').json, default_activity)
+            self.assertEqual(client.get('/api/public/trade-activity?account=us').json, default_activity)
+            self.assertEqual(client.get('/api/public/trade-activity?account=dk').json, {'trades': []})
+            self.assertEqual(client.get('/api/public/trade-activity?account=unknown').status_code, 400)
             put.return_value.status_code = 200
             self.assertEqual(client.patch('/api/private/trades/journal', json=body, headers=headers).status_code, 200)
             write = put.call_args.kwargs['json']
@@ -64,6 +67,7 @@ class TradeJournalTest(unittest.TestCase):
             'date': '2025-10-17', 'quantity': 4, 'price': 25, 'currency': 'USD',
         })
         public = {'date': '2025-10-17', 'ticker': 'ABC', 'action': 'BUY', 'position_change': 'New holding', 'note': ''}
+        public.update(buy_price=25, buy_currency='USD')
         self.assertEqual(public_activity([account]), [public])
         event['journal'] = {'note': 'My reason', 'published': False}
         self.assertEqual(public_activity([account]), [public])

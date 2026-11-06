@@ -76,7 +76,16 @@ def public_activity(documents):
             if action not in ('BUY', 'SELL'):
                 continue
             journal = trade.get('journal', {})
-            rows.append({'date': day(trade), 'ticker': ticker, 'action': action,
-                         'position_change': position_change(action, before, after),
-                         'note': journal.get('note', '') if journal.get('published') is True else ''})
+            row = {'date': day(trade), 'ticker': ticker, 'action': action,
+                   'position_change': position_change(action, before, after),
+                   'note': journal.get('note', '') if journal.get('published') is True else ''}
+            if action == 'BUY':
+                price = _num(trade.get('price_usd'))
+                currency = 'USD'
+                if price is None:
+                    price = _num(trade.get('execution_price_per_share'))
+                    currency = trade.get('price_currency')
+                if price is not None and price > 0 and currency in ('USD', 'DKK'):
+                    row.update(buy_price=price, buy_currency=currency)
+            rows.append(row)
     return sorted(reversed(rows), key=lambda row: row['date'], reverse=True)

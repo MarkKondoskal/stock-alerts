@@ -136,19 +136,21 @@ function activateTab(tabName, moveFocus = false) {
         panel.hidden = !active;
         if (active && moveFocus) button.focus();
     }
-    // Portfolio account/currency filters don't apply to broad market sentiment.
     const controls = document.querySelector('.account-switcher');
-    if (controls) controls.hidden = ['sentiment', 'activity'].includes(tabName);
+    if (controls) controls.hidden = tabName === 'sentiment';
+    document.querySelectorAll('[data-holdings-control]').forEach(item => {
+        item.hidden = tabName === 'activity';
+    });
     for (const id of ['accountStatus', 'publicDataFreshness']) {
         const item = document.getElementById(id);
         if (item) item.hidden = ['sentiment', 'activity'].includes(tabName);
     }
     if (tabName === 'sentiment') window.StockSentiment?.load('public');
-    if (tabName === 'activity') window.loadPublicTradeActivity();
+    if (tabName === 'activity') window.loadPublicTradeActivity(selectedAccount);
 }
 
-const publicTabNames = ['holdings', 'watchlist', 'activity', 'sentiment'];
-const publicTabButtons = [elements.holdingsTab, elements.watchlistTab, elements.tradeActivityTab, elements.sentimentTab];
+const publicTabNames = ['holdings', 'activity', 'watchlist', 'sentiment'];
+const publicTabButtons = [elements.holdingsTab, elements.tradeActivityTab, elements.watchlistTab, elements.sentimentTab];
 publicTabButtons.forEach((button, index) => {
     button.addEventListener('click', () => activateTab(publicTabNames[index]));
     button.addEventListener('keydown', event => {
@@ -671,7 +673,7 @@ function initializeGainersSelector() {
 }
 // Refresh also clears short-lived browser request memoization.
 elements.refreshButton.addEventListener("click", () => {
-    if (!elements.tradeActivityPanel.hidden) window.loadPublicTradeActivity();
+    if (!elements.tradeActivityPanel.hidden) window.loadPublicTradeActivity(selectedAccount);
     analyticsRequests.clear();
     loadFixedAllocation();
     updatePerformance();
@@ -731,6 +733,7 @@ function selectAccount(account) {
         button.classList.toggle('active', active);
         button.setAttribute('aria-pressed', String(active));
     }
+    if (!elements.tradeActivityPanel.hidden) window.loadPublicTradeActivity(account);
     // Both charts get new account data, but their own period buttons remain independent.
     loadFixedAllocation();
     updatePerformance();

@@ -836,8 +836,13 @@ def private_accounts():
 @app.get('/api/public/trade-activity')
 def public_trade_activity():
     from trade_journal import public_activity
+    account = request.args.get('account', 'combined').lower()
+    if account not in ('combined', 'us', 'dk'):
+        return jsonify({'error': 'Invalid account selection'}), 400
     try:
-        response = jsonify({'trades': public_activity(_account_documents())})
+        us, dk = _account_documents()
+        documents = {'combined': (us, dk), 'us': (us,), 'dk': (dk,)}
+        response = jsonify({'trades': public_activity(documents[account])})
         response.headers['Cache-Control'] = 'no-store'
         return response
     except Exception:

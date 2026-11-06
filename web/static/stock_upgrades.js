@@ -43,7 +43,13 @@
       badge.className = 'trade-feed-badge ' + (buy ? 'trade-feed-buy' : 'trade-feed-sell');
       const body = element('div');
       body.className = 'trade-feed-body';
-      body.append(element('strong', (buy ? 'Bought ' : 'Sold ') + trade.ticker));
+      let title = (buy ? 'Bought ' : 'Sold ') + trade.ticker;
+      if (buy && trade.buy_price != null) {
+        const price = new Intl.NumberFormat(undefined, {style: 'currency', currency: trade.buy_currency,
+          currencyDisplay: 'code', maximumFractionDigits: 6}).format(trade.buy_price);
+        title += ' at ' + price + ' per share';
+      }
+      body.append(element('strong', title));
       if (trade.position_change) {
         const change = element('p', trade.position_change);
         change.className = 'trade-feed-change';
@@ -65,18 +71,21 @@
     }
     return feed;
   }
-  window.loadPublicTradeActivity = async () => {
+  let tradeRequest = 0;
+  window.loadPublicTradeActivity = async (account = 'combined') => {
+    const request = ++tradeRequest;
     const node = document.getElementById('public-trade-activity');
     node.replaceChildren(element('p', 'Loading trade activity…'));
     try {
-      const response = await fetch('/api/public/trade-activity', {cache: 'no-store'});
+      const response = await fetch('/api/public/trade-activity?account=' + encodeURIComponent(account), {cache: 'no-store'});
       if (!response.ok) throw new Error('Trade activity temporarily unavailable.');
       const {trades} = await response.json();
+      if (request !== tradeRequest) return;
       node.replaceChildren(trades.length
         ? tradeFeed(trades)
         : element('p', 'No buys or sells are available.'));
     } catch {
-      node.replaceChildren(element('p', 'Trade activity temporarily unavailable.'));
+      if (request === tradeRequest) node.replaceChildren(element('p', 'Trade activity temporarily unavailable.'));
     }
   };
 

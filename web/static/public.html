@@ -283,6 +283,7 @@
         .analytics-head { display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
         .analytics-chart { height: 310px; position:relative; }
         .analytics-chart.short { height: 290px; }
+        .account-switcher[hidden], .account-switcher [hidden] { display: none; }
         .account-switcher { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:0 0 20px; }
         .account-options { display:flex; gap:4px; padding:4px; border:1px solid #303030; background:#171717; border-radius:11px; flex-wrap:wrap; }
         .account-option { font:inherit; font-size:.86rem; color:#a1a1aa; border:0; background:transparent; padding:9px 15px; cursor:pointer; border-radius:8px; }
@@ -373,13 +374,13 @@
                 <button type="button" class="account-option" data-account="us" aria-pressed="false">US · Merrill</button>
                 <button type="button" class="account-option" data-account="dk" aria-pressed="false">DK · Nordnet</button>
             </div>
-            <span class="public-muted currency-caption">Currency</span>
-            <div class="account-options currency-options" role="group" aria-label="Displayed currency">
+            <span class="public-muted currency-caption" data-holdings-control>Currency</span>
+            <div class="account-options currency-options" data-holdings-control role="group" aria-label="Displayed currency">
                 <button type="button" class="currency-option active" data-currency="USD" aria-pressed="true">USD $</button>
                 <button type="button" class="currency-option" data-currency="DKK" aria-pressed="false">DKK kr</button>
             </div>
-            <span class="public-muted">ETFs</span>
-            <div class="account-options" role="group" aria-label="ETF holdings filter">
+            <span class="public-muted" data-holdings-control>ETFs</span>
+            <div class="account-options" data-holdings-control role="group" aria-label="ETF holdings filter">
                 <button type="button" class="etf-option active" data-etfs="excluded" aria-pressed="true">Excluded</button>
                 <button type="button" class="etf-option" data-etfs="included" aria-pressed="false">Included</button>
             </div>
@@ -401,6 +402,11 @@
                 Holdings
             </button>
 
+            <button id="tradeActivityTab" class="public-tab" type="button" role="tab"
+                aria-selected="false" aria-controls="tradeActivityPanel" tabindex="-1">
+                Trade Activity
+            </button>
+
             <button
                 id="watchlistTab"
                 class="public-tab"
@@ -410,11 +416,6 @@
                 aria-controls="watchlistPanel"
                 tabindex="-1">
                 Watchlist
-            </button>
-
-            <button id="tradeActivityTab" class="public-tab" type="button" role="tab"
-                aria-selected="false" aria-controls="tradeActivityPanel" tabindex="-1">
-                Trade Activity
             </button>
 
             <button id="sentimentTab" class="public-tab" type="button" role="tab"
@@ -555,7 +556,7 @@
             aria-labelledby="tradeActivityTab" hidden>
             <div class="analytics-card">
                 <h2>Trade Activity</h2>
-                <p>Recorded buys and sells from both portfolios. Position changes are based on each account’s trade history.</p>
+                <p>Buys and sells for the selected portfolio. Buy prices are per share in the original trade currency.</p>
                 <div id="public-trade-activity" aria-live="polite"></div>
             </div>
         </section>
@@ -571,7 +572,7 @@
         </footer>
     </main>
 
-    <script src="/static/stock_upgrades.js?v=trade-feed-1" defer></script><script src="/static/public.js?v=trade-feed-1" defer></script>
+    <script src="/static/stock_upgrades.js?v=trade-feed-2" defer></script><script src="/static/public.js?v=trade-feed-2" defer></script>
     <script src="/static/sentiment_ui.js?v=trade-journal-1" defer></script>
 </body>
 </html>
