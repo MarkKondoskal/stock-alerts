@@ -831,20 +831,73 @@ def private_accounts():
         return jsonify({'error':'Could not load private accounts'}),502
 
 
+@app.get('/api/public/trade-activity')
+def public_trade_activity():
+    from trade_journal import public_activity
+    try:
+        response = jsonify({'trades': public_activity(_account_documents())})
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+    except Exception:
+        app.logger.exception('Public trade activity query failed')
+        return jsonify({'error': 'Could not load shared trade activity'}), 502
+
+
+@app.patch('/api/private/trades/journal')
+def private_trade_journal_update():
+    error = require_auth()
+    if error:
+        return error
+    from trade_journal import journal_trades, journal_update
+    from trade_manager import FILES
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict) or body.get('account') not in ('us', 'dk'):
+        return jsonify({'error': 'Choose a trade to edit'}), 400
+    try:
+        path = FILES[body['account']]
+        data, sha = get_file(path, data=True)
+        trade = next((trade for key, trade in journal_trades(data) if key == body.get('trade_id')), None)
+        if trade is None:
+            return jsonify({'error': 'Trade has changed. Refresh the list and try again.'}), 404
+        journal = journal_update(body, trade)
+        if trade.get('journal') != journal:
+            trade['journal'] = journal
+            _, branch = repository_and_branch(data=True)
+            content = base64.b64encode((json.dumps(data, indent=2, ensure_ascii=False) + '\n').encode()).decode()
+            result = requests.put(repo_url(path, data=True), headers=gh_headers(), timeout=25,
+                                  json={'message': 'Update private trade journal', 'content': content,
+                                        'sha': sha, 'branch': branch})
+            if result.status_code in (409, 422):
+                return jsonify({'error': 'Account changed. Refresh the list before retrying.'}), 409
+            result.raise_for_status()
+        response = jsonify(journal)
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except (requests.RequestException, RuntimeError):
+        app.logger.exception('Trade journal save failed')
+        return jsonify({'error': 'Could not confirm the note was saved. Refresh before retrying.'}), 502
+
+
 @app.get('/api/private/trades')
 def private_trade_history():
-    """Recent manual transactions for authenticated owners only; NEVER public."""
+    """Authenticated trade details and journal for recorded and imported trades."""
     err=require_auth()
     if err:return err
     try:
         from trade_manager import FILES
+        from trade_journal import journal_trades
+        offset = max(0, request.args.get('offset', 0, type=int))
         events=[]
         for account,path in FILES.items():
             data,_=get_file(path,data=True)
-            for t in data.get('transactions',[]):
-                if t.get('source') != 'manual_private_dashboard':
-                    continue
+            for trade_id, t in journal_trades(data):
+                journal = t.get('journal', {})
                 events.append({
+                    'trade_id':trade_id,
+                    'note':journal.get('note', ''),
+                    'published':journal.get('published') is True,
                     'event_id':t.get('event_id'),
                     'account':account,
                     'action':t.get('action'),
@@ -863,7 +916,7 @@ def private_trade_history():
                     'correctable':'request' in t,
                 })
         events.sort(key=lambda e:(e['date'] or '',e['event_id'] or ''),reverse=True)
-        response=jsonify({'transactions':events[:30],'count':len(events)})
+        response=jsonify({'transactions':events[offset:offset + 30],'count':len(events)})
         response.headers['Cache-Control']='no-store'
         return response
     except Exception:

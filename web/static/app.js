@@ -25,6 +25,7 @@ if(password){$('#password').value=password;connect() }else connected(false);
 
 let accountSnapshots={};
 let correctingTrade=null;
+let tradeOffset=0;
 async function loadTrades(){
   accountSnapshots=await api('/api/private/accounts');
   const account=$('#trade-account').value;
@@ -68,8 +69,9 @@ function previewTrade(){
   const after=Number.isFinite(quantity)?held+(action==='BUY'?quantity:-quantity):held;
   $('#trade-preview').textContent=`${action} ${ticker||'—'} · ${value} ${value==='—'?'':`· Shares before ${fmt(held,4)} → after ${fmt(after,4)}`} · ${account==='us'?'Merrill':'Nordnet'}`;
 }
-async function loadTradeHistory(){
-  const d=await api('/api/private/trades');
+async function loadTradeHistory(offset=0){
+  const d=await api('/api/private/trades?offset='+offset);
+  tradeOffset=offset;
   const tbody=$('#trade-history-rows');
   tbody.replaceChildren();
   for(const t of d.transactions||[]){
@@ -79,6 +81,7 @@ async function loadTradeHistory(){
       t.fee==null?'—':t.currency+' '+fmt(t.fee),t.realized==null?'—':t.currency+' '+fmt(t.realized)]){
       row.insertCell().textContent=value;
     }
+    row.insertCell().append(tradeNoteEditor(t));
     const cell=row.insertCell();
     if(t.correctable){
       const button=document.createElement('button');
@@ -89,7 +92,56 @@ async function loadTradeHistory(){
       cell.append(button);
     }
   }
-  $('#trade-history-note').textContent=`${d.count||0} manually recorded transactions in private ledger · showing latest 30`;
+  const count=d.count||0;
+  $('#trade-history-note').textContent=count
+    ? 'Showing '+(offset+1)+'–'+Math.min(offset+30,count)+' of '+count+' trades'
+    : 'No trades available.';
+  $('#trade-history-prev').disabled=offset===0;
+  $('#trade-history-next').disabled=offset+30>=count;
+}
+function tradeNoteEditor(trade){
+  const details=document.createElement('details');
+  const summary=document.createElement('summary');
+  const textarea=document.createElement('textarea');
+  textarea.setAttribute('aria-label','Reason for '+trade.action+' '+trade.ticker+' on '+trade.date);
+  textarea.maxLength=2000;
+  textarea.rows=4;
+  textarea.value=trade.note;
+  const label=document.createElement('label');
+  const publish=document.createElement('input');
+  publish.type='checkbox';
+  publish.checked=trade.published;
+  publish.disabled=trade.action==='SPLIT';
+  label.append(publish,' Share on the public site');
+  const help=document.createElement('small');
+  help.textContent='Sharing posts the date, ticker, side and your note. Keep account details and amounts out of any note you share.';
+  const save=document.createElement('button');
+  save.type='button';
+  save.className='ghost';
+  save.textContent='Save note';
+  const status=document.createElement('small');
+  status.setAttribute('role','status');
+  const updateLabel=()=>{summary.textContent=(trade.note?'Edit note':'Add note')+' · '+(trade.published?'Public':'Private');};
+  updateLabel();
+  save.onclick=async()=>{
+    if(publish.checked&&!confirm('Publish this trade’s date, ticker, side and note for anyone to read?'))return;
+    save.disabled=true;
+    try{
+      const result=await api('/api/private/trades/journal',{method:'PATCH',body:JSON.stringify({
+        account:trade.account,trade_id:trade.trade_id,note:textarea.value,published:publish.checked,
+      })});
+      trade.note=textarea.value=result.note;
+      trade.published=result.published;
+      updateLabel();
+      status.textContent=result.published?'Saved and published.':'Saved privately.';
+    }catch(error){status.textContent=error.message;}
+    finally{save.disabled=false;}
+  };
+  const editor=document.createElement('div');
+  editor.className='trade-note-editor';
+  editor.append(textarea,label,help,save,status);
+  details.append(summary,editor);
+  return details;
 }
 function selectCorrection(trade){
   correctingTrade=trade;
@@ -112,7 +164,9 @@ $('#trade-account').onchange=()=>loadTrades().catch(e=>toast(e.message,'error'))
 $('#trade-ticker').addEventListener('input',chooseTradeCurrency);
 for (const name of ['#trade-quantity','#trade-price','#trade-action','#trade-currency','#trade-fee','#trade-fee-currency','#trade-fee-rate']) $(name).addEventListener('input',previewTrade);
 $('#trade-refresh').onclick=()=>loadTrades().catch(e=>toast(e.message,'error'));
-$('#trade-history-refresh').onclick=()=>loadTradeHistory().catch(e=>toast(e.message,'error'));
+$('#trade-history-refresh').onclick=()=>loadTradeHistory(tradeOffset).catch(e=>toast(e.message,'error'));
+$('#trade-history-prev').onclick=()=>loadTradeHistory(tradeOffset-30).catch(e=>toast(e.message,'error'));
+$('#trade-history-next').onclick=()=>loadTradeHistory(tradeOffset+30).catch(e=>toast(e.message,'error'));
 const initialTradeDate=new Date();while(initialTradeDate.getDay()===0||initialTradeDate.getDay()===6)initialTradeDate.setDate(initialTradeDate.getDate()-1);
 $('#trade-date').value=[initialTradeDate.getFullYear(),String(initialTradeDate.getMonth()+1).padStart(2,'0'),String(initialTradeDate.getDate()).padStart(2,'0')].join('-');
 $('#trade-form').onsubmit=async event=>{

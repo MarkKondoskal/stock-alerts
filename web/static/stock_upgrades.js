@@ -31,61 +31,21 @@
     return link;
   }
   const local = stamp => stamp ? new Date(stamp).toLocaleString() : 'Unavailable';
-  const percent = value => value == null ? 'Unavailable' : value.toFixed(2) + '%';
-  const charts = {};
-  window.renderAdvanced = (scope, data) => {
-    const node = document.getElementById('advanced-' + scope);
-    charts[scope]?.destroy();
-    delete charts[scope];
-    node.replaceChildren(element('h3', 'Risk and return attribution'));
-    const metrics = data?.advanced;
-    if (!metrics || metrics.max_drawdown_pct == null) {
-      node.append(element('p', data ? 'Unavailable for the selected period.' : 'Loading…'));
-      return;
+  window.loadPublicTradeActivity = async () => {
+    const node = document.getElementById('public-trade-activity');
+    node.replaceChildren(element('p', 'Loading shared activity…'));
+    try {
+      const response = await fetch('/api/public/trade-activity', {cache: 'no-store'});
+      if (!response.ok) throw new Error('Trade activity temporarily unavailable.');
+      const {trades} = await response.json();
+      node.replaceChildren(trades.length
+        ? table(['Date', 'Ticker', 'Side', 'Note'], trades.map(trade => [
+            trade.date, trade.ticker, trade.action, element('span', trade.note || '—'),
+          ]))
+        : element('p', 'No trades have been shared yet.'));
+    } catch {
+      node.replaceChildren(element('p', 'Trade activity temporarily unavailable.'));
     }
-    const rolling = metrics.rolling.at(-1);
-    node.append(element('p', [
-      'Max drawdown ' + percent(metrics.max_drawdown_pct),
-      'Annualized volatility ' + percent(metrics.volatility_pct),
-      '21-session return ' + percent(rolling?.portfolio_pct),
-      '21-session SPY ' + percent(rolling?.spy_pct),
-    ].join(' · ')));
-    if (typeof Chart !== 'undefined') {
-      const frame = element('div');
-      frame.style.height = '220px';
-      frame.style.position = 'relative';
-      const canvas = element('canvas');
-      canvas.setAttribute('aria-label', 'Drawdown and rolling 21-session returns');
-      frame.append(canvas);
-      node.append(frame);
-      const dates = metrics.drawdowns.map(point => point.date);
-      const rollingByDate = new Map(metrics.rolling.map(point => [point.date, point]));
-      charts[scope] = new Chart(canvas, {
-        type: 'line',
-        data: {labels: dates, datasets: [
-          {label: 'Drawdown', data: metrics.drawdowns.map(point => point.value), borderColor: '#f59e0b'},
-          {label: 'Rolling portfolio', data: dates.map(day => rollingByDate.get(day)?.portfolio_pct ?? null), borderColor: '#2dd4bf'},
-          {label: 'Rolling SPY', data: dates.map(day => rollingByDate.get(day)?.spy_pct ?? null), borderColor: '#bb92ef'},
-        ]},
-        options: {responsive: true, maintainAspectRatio: false, elements: {point: {radius: 0}},
-          scales: {x: {ticks: {maxTicksLimit: 7}}, y: {ticks: {callback: value => value + '%'}}}},
-      });
-    }
-    const rows = metrics.contributions;
-    if (!rows.length) {
-      node.append(element('p', 'Contribution by stock is unavailable for this period.'));
-      return;
-    }
-    const isPrivate = scope === 'private';
-    const amount = new Intl.NumberFormat(undefined, {style: 'currency', currency: data.currency});
-    const headers = ['Ticker', 'Contribution (pp)'];
-    if (isPrivate) headers.push('Estimated market P/L');
-    const details = element('details');
-    details.append(element('summary', 'Contribution by stock'),
-      element('p', 'Dated holdings and close-to-close price moves. Includes FX in the selected currency. Excludes cash, fees and ordinary dividends.'),
-      table(headers, rows.map(row => [row.ticker, row.contribution_pp.toFixed(3),
-        ...(isPrivate ? [amount.format(row.market_move_amount)] : [])])));
-    node.append(details);
   };
 
   let calendarRequest;

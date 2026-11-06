@@ -12,6 +12,8 @@ const elements = {
     sentimentTab: document.getElementById("sentimentTab"),
     holdingsPanel: document.getElementById("holdingsPanel"),
     watchlistPanel: document.getElementById("watchlistPanel"),
+    tradeActivityTab: document.getElementById("tradeActivityTab"),
+    tradeActivityPanel: document.getElementById("tradeActivityPanel"),
     sentimentPanel: document.getElementById("sentimentPanel"),
 
     holdingsBody: document.getElementById("holdingsBody"),
@@ -124,6 +126,7 @@ function activateTab(tabName, moveFocus = false) {
     const tabs = [
         ["holdings", elements.holdingsTab, elements.holdingsPanel],
         ["watchlist", elements.watchlistTab, elements.watchlistPanel],
+        ["activity", elements.tradeActivityTab, elements.tradeActivityPanel],
         ["sentiment", elements.sentimentTab, elements.sentimentPanel],
     ];
     for (const [name, button, panel] of tabs) {
@@ -135,16 +138,17 @@ function activateTab(tabName, moveFocus = false) {
     }
     // Portfolio account/currency filters don't apply to broad market sentiment.
     const controls = document.querySelector('.account-switcher');
-    if (controls) controls.hidden = tabName === 'sentiment';
+    if (controls) controls.hidden = ['sentiment', 'activity'].includes(tabName);
     for (const id of ['accountStatus', 'publicDataFreshness']) {
         const item = document.getElementById(id);
-        if (item) item.hidden = tabName === 'sentiment';
+        if (item) item.hidden = ['sentiment', 'activity'].includes(tabName);
     }
     if (tabName === 'sentiment') window.StockSentiment?.load('public');
+    if (tabName === 'activity') window.loadPublicTradeActivity();
 }
 
-const publicTabNames = ['holdings', 'watchlist', 'sentiment'];
-const publicTabButtons = [elements.holdingsTab, elements.watchlistTab, elements.sentimentTab];
+const publicTabNames = ['holdings', 'watchlist', 'activity', 'sentiment'];
+const publicTabButtons = [elements.holdingsTab, elements.watchlistTab, elements.tradeActivityTab, elements.sentimentTab];
 publicTabButtons.forEach((button, index) => {
     button.addEventListener('click', () => activateTab(publicTabNames[index]));
     button.addEventListener('keydown', event => {
@@ -497,11 +501,9 @@ async function updatePerformance() {
     const note = document.getElementById("performanceNote");
     document.getElementById("performancePeriodLabel").textContent = period === "ALL" ? "All" : period;
     note.textContent = "Loading market history…";
-    window.renderAdvanced?.("public");
     try {
         const info = await analyticsFor(period, account);
         if (period !== performancePeriod || generation !== accountGeneration || currencyAtRequest !== selectedCurrency) return;
-        window.renderAdvanced('public', info);
         const spy = new Map((info.spy || []).map(p => [p.date, p.value]));
         const aligned = (info.performance || []).filter(p => spy.has(p.date));
         const fullPeriodElement = document.getElementById("spyFullPeriod");

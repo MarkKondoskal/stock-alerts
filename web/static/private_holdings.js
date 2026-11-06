@@ -53,8 +53,11 @@ function privateRenderSnapshot(s){
     privateSet('private-unrealized',privateSignedMoney(s.unrealized_pl));
     privateColor(document.getElementById('private-unrealized'),s.unrealized_pl);
     privateSet('private-unrealized-pct',`${privatePercent(s.unrealized_pl_pct)} on open positions · not realized`);
-    privateSet('private-position-count',String(s.position_count));
-    privateSet('private-ticker-count',`${s.ticker_count} distinct tickers across selected accounts`);
+    const realized=s.realized;
+    privateSet('private-realized',privateSignedMoney(realized.amount));
+    privateColor(document.getElementById('private-realized'),realized.amount);
+    const recorded=realized.included ? 'Recorded sales · current FX' : 'No recorded realized amounts';
+    privateSet('private-realized-note',recorded+(realized.missing ? ' · '+realized.missing+' without figures' : ''));
     const dates=Object.entries(s.positions_as_of||{}).map(([account,day])=>`${privateLabel[account]} ${day||'unknown'}`).join(' · ');
     privateSet('private-freshness',`${dates||'Account dates unavailable'} · Latest available closes · ${s.currency} · ETFs ${s.include_etfs?'included':'excluded'}`);
     const rows=(s.holdings||[]).map(h=>{
@@ -84,7 +87,7 @@ async function privateLoadSnapshot(version){
     }catch(error){if(version!==privateHoldingsState.version)return;
         privateSet('private-freshness','Private holdings unavailable: '+error.message);
         document.getElementById('private-holdings-rows').innerHTML='<tr><td colspan="11">Could not fetch current account positions or prices. Try Refresh holdings.</td></tr>';
-        for(const id of ['private-market-value','private-cost-basis','private-unrealized','private-position-count','private-ticker-count'])privateSet(id,'—');
+        for(const id of ['private-market-value','private-cost-basis','private-unrealized','private-realized','private-realized-note'])privateSet(id,'—');
         for(const id of ['private-holdings-chart','private-sector-chart'])privateEmptyChart(id);
     }
 }
@@ -92,11 +95,9 @@ async function privateLoadPerformance(version){
     const requestId = ++privatePerformanceRequest;
     const {period}=privateHoldingsState;
     privateSet('private-performance-note','Loading historical performance…');
-    window.renderAdvanced?.('private');
     try{
         const result=await api('/api/private/holdings/analytics'+privateQuery(period));
         if(version!==privateHoldingsState.version||period!==privateHoldingsState.period||requestId!==privatePerformanceRequest)return;
-        window.renderAdvanced('private', result);
         const spy=new Map((result.spy||[]).map(p=>[p.date,Number(p.value)]));
         const aligned=(result.performance||[]).filter(p=>spy.has(p.date));
         if(aligned.length<2){privateEmptyChart('private-performance-chart');

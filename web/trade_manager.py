@@ -194,10 +194,14 @@ def correct_trade(source, incoming):
     data['transactions'] = deepcopy(events[:target])
     data['positions_as_of'] = original['prior_positions_as_of']
     data, replacement = record_trade(data, incoming)
+    if 'journal' in original:
+        replacement['journal'] = {**original['journal'], 'published': False}
     for trade in tail[1:]:
-        data, _ = record_trade(data, {**trade['request'],
+        data, replayed = record_trade(data, {**trade['request'],
                                      'account': incoming['account'],
                                      'client_trade_id': trade['event_id']})
+        if 'journal' in trade:
+            replayed['journal'] = deepcopy(trade['journal'])
     data.setdefault('trade_audit', []).append({**deepcopy(original),
                                                'superseded_by': replacement['event_id']})
     return data, replacement

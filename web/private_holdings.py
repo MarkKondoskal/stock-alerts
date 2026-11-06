@@ -7,7 +7,26 @@ no cash, fees, accrued dividends or broker-reported realized P/L are included.
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from account_public import _positions, _quote_prices
+from account_public import ETF_TICKERS, _num, _positions, _quote_prices
+
+
+def realized_summary(documents, account, currency, include_etfs, fx):
+    total, included, missing = 0.0, 0, 0
+    for key, document in documents:
+        if account not in ('combined', key):
+            continue
+        for trade in document.get('transactions', []):
+            if trade.get('action') != 'SELL' or (not include_etfs and trade.get('ticker') in ETF_TICKERS):
+                continue
+            gain = _num(trade.get('realized_gain_in_quote_currency'))
+            quote = 'USD' if key == 'us' else trade.get('price_currency')
+            if gain is None or quote not in ('USD', 'DKK') or (quote != currency and not fx):
+                missing += 1
+                continue
+            rate = 1 if quote == currency else fx if currency == 'DKK' else 1 / fx
+            total += gain * rate
+            included += 1
+    return {'amount': round(total, 2) if included else None, 'included': included, 'missing': missing}
 
 
 def private_snapshot(us, dk, account='combined', currency='USD', include_etfs=False):
@@ -85,6 +104,7 @@ def private_snapshot(us, dk, account='combined', currency='USD', include_etfs=Fa
         'holdings': holdings,
         'position_count': len(positions), 'ticker_count': len(rows),
         'market_value': round(total_value, 2),
+        'realized': realized_summary((('us', us), ('dk', dk)), account, currency, include_etfs, fx),
         'cost_basis': round(known_cost, 2) if complete_cost and complete_prices else None,
         'unrealized_pl': round(known_market - known_cost, 2) if complete_cost and complete_prices else None,
         'unrealized_pl_pct': round(100 * (known_market - known_cost) / known_cost, 2)
