@@ -1195,6 +1195,9 @@ function updateAllocation(info) {
 async function updateGainers() {
 
     const period = gainerPeriod;
+    const clearDriver = id => {if(analyticsCharts[id]){analyticsCharts[id].destroy();delete analyticsCharts[id];}};
+    clearDriver('driversChart');
+    document.getElementById('driversNote').textContent='Loading portfolio contributions…';
 
     const account = selectedAccount;
 
@@ -1212,6 +1215,7 @@ async function updateGainers() {
 
         if (period !== gainerPeriod || generation !== accountGeneration || currencyAtRequest !== selectedCurrency) return;
 
+        PerformanceDrivers.render(info,{chartId:'driversChart',noteId:'driversNote',draw:createChart,clear:clearDriver,period});
         const sorted = [...info.gainers].sort((a, b) => b.return_pct - a.return_pct);
 
         if (!sorted.length) { note.textContent = "No price history available for the selected period."; return; }
@@ -1240,9 +1244,10 @@ async function updateGainers() {
 
     } catch (error) {
 
-        if (generation !== accountGeneration || currencyAtRequest !== selectedCurrency) return;
+        if (period !== gainerPeriod || generation !== accountGeneration || currencyAtRequest !== selectedCurrency) return;
 
         note.textContent = `Gainers/losers unavailable: ${error.message}`;
+        clearDriver('driversChart');document.getElementById('driversNote').textContent='Portfolio contributions unavailable. Refresh to retry.';
 
     }
 

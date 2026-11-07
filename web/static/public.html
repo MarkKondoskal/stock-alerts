@@ -474,6 +474,12 @@
                     <div class="analytics-chart"><canvas id="gainersChart" role="img" aria-label="Holdings return horizontal bar chart"></canvas></div>
                     <p id="gainerNote" class="analytics-note">Percentage stock-price change for selected period, not dollar P/L.</p>
                 </div>
+                <div class="analytics-card full">
+                    <div class="analytics-head"><h2 class="analytics-title">Performance Drivers</h2></div>
+                    <p class="analytics-note">Portfolio contribution · follows the gainers period above</p>
+                    <div class="analytics-chart"><canvas id="driversChart" role="img" aria-label="Contributors and detractors in percentage points"></canvas></div>
+                    <p id="driversNote" class="analytics-note" role="status">Loading portfolio contributions…</p>
+                </div>
             </div>
             <div class="public-card">
                 <div class="public-card-header">
@@ -574,7 +580,7 @@
         </footer>
     </main>
 
-    <script src="/static/stock_upgrades.js?v=trade-feed-2" defer></script><script src="/static/watchlist_ui.js?v=2" defer></script><script src="/static/public.js?v=watchlist-controls-1" defer></script>
+    <script src="/static/stock_upgrades.js?v=trade-feed-2" defer></script><script src="/static/watchlist_ui.js?v=2" defer></script><script src="/static/drivers_ui.js?v=1" defer></script><script src="/static/public.js?v=performance-drivers-1" defer></script>
     <script src="/static/sentiment_ui.js?v=trade-journal-1" defer></script>
 </body>
 </html>

@@ -253,7 +253,9 @@ def analytics(us,dk,account,period,read_csv,currency='USD',include_etfs=False):
     performance=_select_period(sorted(rows),period)
     gainers=_cached(('gainers',account,period,include_etfs,tuple(sorted(p['ticker'] for p in positions))),
                     lambda:_gainers(positions,period),600)
-    return {'period':period,'account':account,'currency':currency,'include_etfs':include_etfs,
+    from performance_drivers import drivers
+    contribution = drivers([{'date': p['date'], 'value': p['portfolio']} for p in performance], account, currency, include_etfs, read_csv)
+    return {**contribution, 'period':period,'account':account,'currency':currency,'include_etfs':include_etfs,
             'performance':[{'date':p['date'],'value':p['portfolio']} for p in performance],
             'spy':[{'date':p['date'],'value':p['spy']} for p in performance],
             'gainers':gainers,'performance_note':note,

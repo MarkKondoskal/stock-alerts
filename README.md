@@ -205,3 +205,21 @@ same background job and display their available timestamps. A newly added ticker
 shows unavailable quotes until the next successful preparation; configured targets
 always remain visible. This improves repeated page loads but does not eliminate a
 Render cold start or GitHub API latency. Portfolio return methodology is unchanged.
+
+
+## Performance Drivers
+
+The Holdings view on both dashboards includes Performance Drivers directly below
+Biggest gainers & losers. It follows the gainers-period selection plus the shared
+account, currency, and ETF filters. Bars show up to five positive contributors and
+five negative contributors in percentage points of the selected portfolio return.
+The input is the existing private historical attribution CSV, including positions
+sold during the period. Daily contributions are linked using the portfolio wealth
+index. Public output contains ticker symbols and contribution percentages only.
+
+Missing intervals or a total differing from the displayed return by more than
+0.05 percentage points suppress the chart until matching inputs are available.
+The chart retains the provisional securities-only methodology and exclusions of
+the portfolio history. Existing prepared snapshots without driver fields are
+supplemented from attribution inputs; future preparations include drivers directly.
+Run Python regression tests and `node --test tests/*.test.cjs` for validation.

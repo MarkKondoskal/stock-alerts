@@ -620,13 +620,17 @@ def _prepared_result(section, key, us, dk):
     from prepared import select
     result = select(_prepared_bundle(), section, key, us, dk)
     if result is not None:
+        if section == 'analytics' and 'drivers' not in result:
+            from performance_drivers import drivers
+            parts = key.split(':')
+            result = {**result, **drivers(result.get('performance', []), parts[0], parts[1], parts[2] == '1', _private_csv)}
         # Explicit public projections: the private bundle is never an API response.
         allowed = ({'holdings', 'sectors', 'basis', 'missing_tickers', 'quote_dates',
                     'market_data_through', 'stale_tickers', 'as_of', 'positions_as_of',
                     'account', 'currency', 'include_etfs'} if section == 'public' else
                    {'period', 'account', 'currency', 'include_etfs', 'performance', 'spy',
                     'gainers', 'performance_note', 'available_from', 'performance_through',
-                    'missing_tickers', 'spy_selected_period'} if section == 'analytics' else None)
+                    'missing_tickers', 'spy_selected_period', 'drivers', 'drivers_note', 'drivers_total_pp'} if section == 'analytics' else None)
         if allowed:
             result = {k: v for k, v in result.items() if k in allowed}
     return result
@@ -690,6 +694,12 @@ def _account_documents():
 def _private_csv(path):
     """Read an allowlisted CSV from the private repository, server-side only."""
     if path not in (
+        "portfolio/performance/attribution_us.csv",
+        "portfolio/performance/attribution_us_excluded.csv",
+        "portfolio/performance/attribution_dk.csv",
+        "portfolio/performance/attribution_dk_excluded.csv",
+        "portfolio/performance/attribution_combined.csv",
+        "portfolio/performance/attribution_combined_excluded.csv",
         "portfolio/performance/merrill_history_provisional.csv",
         "portfolio/performance/nordnet_all_available_provisional.csv",
         "portfolio/performance/combined_history_provisional.csv",
