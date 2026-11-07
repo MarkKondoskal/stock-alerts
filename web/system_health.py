@@ -7,6 +7,7 @@ import requests
 from performance_files import read_history
 
 CHECKS = (
+    ('Dashboard preparation', 'dashboard_snapshots.yml', False, 12),
     ('Portfolio history update', 'daily_portfolio_performance.yml', True, 32),
     ('Discord heartbeat delivery', 'heartbeat.yml', False, 32),
     ('Stock quote refresh', 'stock_checker.yml', False, 20),

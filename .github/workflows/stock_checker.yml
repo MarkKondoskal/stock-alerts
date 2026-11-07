@@ -55,11 +55,22 @@ jobs:
         id: stock_quotes
         continue-on-error: true
         env:
+          STOCKALERTS_ALERT_HISTORY_FILE: _private/alerts/alert_history.json
           STOCKALERTS_WATCHLIST_FILE: _private/alerts/watchlist.json
           DISCORD_STOCK_WEBHOOK: ${{ secrets.DISCORD_STOCK_WEBHOOK }}
         run: python alerts/stock_alert.py
 
+      - name: Preserve private alert delivery history
+        if: always() && (steps.stock_quotes.outcome == 'success' || steps.stock_quotes.outcome == 'failure')
+        env:
+          STOCKALERTS_ALERT_HISTORY_FILE: _private/alerts/alert_history.json
+          STOCKALERTS_DATA_REPOSITORY: ${{ vars.STOCKALERTS_DATA_REPOSITORY }}
+          STOCKALERTS_DATA_BRANCH: ${{ vars.STOCKALERTS_DATA_BRANCH || 'main' }}
+          STOCKALERTS_DATA_TOKEN: ${{ secrets.STOCKALERTS_DATA_TOKEN }}
+        run: python alerts/publish_dashboard_data.py
+
       - name: Commit triggered target removals to private repository
+        if: always() && (steps.stock_quotes.outcome == 'success' || steps.stock_quotes.outcome == 'failure')
         env:
           STOCKALERTS_PRIVATE_CHECKOUT: _private
           STOCKALERTS_DATA_REPOSITORY: ${{ vars.STOCKALERTS_DATA_REPOSITORY }}

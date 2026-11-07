@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from watchlist_rules import validate_watchlist
+from alerts.alert_history import deliver
 
 import os
 import json
@@ -183,7 +184,8 @@ def check_prices():
             remaining_prices = []
             for target in price_targets:
                 if check_price is not None and check_price <= target:
-                    if send_discord_alert(symbol, float(current_price or check_price), float(check_price), float(target)):
+                    if deliver(lambda: send_discord_alert(symbol, float(current_price or check_price), float(check_price), float(target)),
+                               ticker=symbol, metric='PRICE', direction='buy', target=float(target), actual=float(check_price)):
                         changed = True
                         delivered_prices.append(target)
                     else:
@@ -212,7 +214,8 @@ def check_prices():
                         for target in targets.get(direction, []):
                             triggered = actual is not None and ((direction == "trim" and actual >= target) or (direction == "buy" and actual <= target))
                             if triggered:
-                                if send_valuation_alert(symbol, metric, direction, float(target), float(actual), current_price):
+                                if deliver(lambda: send_valuation_alert(symbol, metric, direction, float(target), float(actual), current_price),
+                                           ticker=symbol, metric=metric, direction=direction, target=float(target), actual=float(actual)):
                                     changed = True
                                 else:
                                     complete = False

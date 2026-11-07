@@ -10,13 +10,31 @@ test('untrusted tickers and target attributes are escaped', () => {
   const context = vm.createContext({
     document: {querySelectorAll: () => []},
     $: () => ({set innerHTML(value) {html = value;}}),
+    watchSort: 'ticker',
+    watchMarket: {},
     watchlist: {'"><img src=x onerror=alert(1)>': {price_targets: ['" onfocus="alert(1)']}}
   });
   const esc = source.split('\n').find(line => line.startsWith('const esc ='));
-  const functions = ['targetArray', 'vals', 'renderWatchlist'].map(name =>
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/static/watchlist_ui.js'), 'utf8'), context);
+  const functions = ['targetArray', 'vals'].map(name =>
     source.split('\n').find(line => line.startsWith(`function ${name}(`)));
-  vm.runInContext([esc, ...functions, 'renderWatchlist();'].join('\n'), context);
+  vm.runInContext([esc, ...functions, source.slice(source.indexOf('function renderWatchlist()'), source.indexOf('function collectWatchlist()')), 'renderWatchlist();'].join('\n'), context);
   assert.ok(!html.includes('<img'));
   assert.ok(!html.includes('value="" onfocus='));
   assert.ok(html.includes('&lt;img'));
+});
+
+test('directional distances, unavailable values and prices are safe', () => {
+  const context = vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/static/watchlist_ui.js'), 'utf8'), context);
+  const ui = context.WatchlistUI;
+  const targets = {price_targets: [80], valuation_targets: {PE: {buy: [20], trim: [40]}}};
+  const output = ui.proximity(targets, {price: 100, valuations: {PE: 25}});
+  assert.ok(output.includes('20.0% fall needed'));
+  assert.ok(output.includes('60.0% rise needed'));
+  assert.ok(ui.proximity(targets, {price: 70}).includes('Condition met'));
+  assert.ok(!ui.proximity(targets, {}).includes('NaN'));
+  assert.ok(Math.abs(ui.nearest(targets, {price: 100}) - 0.2) < 1e-10);
+  assert.equal(ui.nearest(targets, {}), Infinity);
+  assert.ok(!ui.price({price: 100, currency: '<img src=x>'}).includes('<img'));
 });

@@ -343,7 +343,7 @@
             }
         }
     </style>
-</head>
+<link rel="stylesheet" href="/static/watchlist.css?v=1"></head>
 
 <body>
     <main class="public-dashboard">
@@ -494,7 +494,7 @@
                         </thead>
                         <tbody id="holdingsBody">
                             <tr>
-                                <td colspan="3" class="public-empty">
+                                <td colspan="6" class="public-empty">
                                     Loading holdings…
                                 </td>
                             </tr>
@@ -521,7 +521,7 @@
             <div class="public-card">
                 <div class="public-card-header">
                     <h2>Watchlist</h2>
-                    <span id="watchlistCount" class="public-muted">
+                    <label>Sort <select id="watchlist-sort-public"><option value="ticker">Ticker</option><option value="nearest">Closest to target</option></select></label><span id="watchlistCount" class="public-muted">
                         Loading…
                     </span>
                 </div>
@@ -531,13 +531,13 @@
                         <thead>
                             <tr>
                                 <th>Ticker</th>
-                                <th>Price Targets</th>
+                                <th>Current price</th><th>Current valuation</th><th>Proximity</th><th>Price targets</th>
                                 <th>Valuation Targets</th>
                             </tr>
                         </thead>
                         <tbody id="watchlistBody">
                             <tr>
-                                <td colspan="3" class="public-empty">
+                                <td colspan="6" class="public-empty">
                                     Loading watchlist…
                                 </td>
                             </tr>
@@ -573,7 +573,7 @@
         </footer>
     </main>
 
-    <script src="/static/stock_upgrades.js?v=trade-feed-2" defer></script><script src="/static/public.js?v=watchlist-controls-1" defer></script>
+    <script src="/static/stock_upgrades.js?v=trade-feed-2" defer></script><script src="/static/watchlist_ui.js?v=1" defer></script><script src="/static/public.js?v=watchlist-controls-1" defer></script>
     <script src="/static/sentiment_ui.js?v=trade-journal-1" defer></script>
 </body>
 </html>

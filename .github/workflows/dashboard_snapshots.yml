@@ -1,0 +1,41 @@
+name: Prepare dashboard snapshots
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7 7-23 * * 1-5'
+permissions:
+  contents: read
+concurrency:
+  group: prepared-dashboard-snapshots
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify private data repository
+        env:
+          DATA_REPOSITORY: ${{ vars.STOCKALERTS_DATA_REPOSITORY }}
+          GH_TOKEN: ${{ secrets.STOCKALERTS_DATA_TOKEN }}
+        run: |
+          test -n "$DATA_REPOSITORY" && test -n "$GH_TOKEN"
+          test "$(gh api "repos/$DATA_REPOSITORY" --jq .private)" = true
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.STOCKALERTS_DATA_REPOSITORY }}
+          ref: ${{ vars.STOCKALERTS_DATA_BRANCH || 'main' }}
+          token: ${{ secrets.STOCKALERTS_DATA_TOKEN }}
+          persist-credentials: false
+          path: _private
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r web/requirements.txt
+      - name: Build and publish private prepared results
+        env:
+          STOCKALERTS_PRIVATE_CHECKOUT: _private
+          STOCKALERTS_DATA_REPOSITORY: ${{ vars.STOCKALERTS_DATA_REPOSITORY }}
+          STOCKALERTS_DATA_BRANCH: ${{ vars.STOCKALERTS_DATA_BRANCH || 'main' }}
+          STOCKALERTS_DATA_TOKEN: ${{ secrets.STOCKALERTS_DATA_TOKEN }}
+        run: python alerts/prepare_dashboard.py

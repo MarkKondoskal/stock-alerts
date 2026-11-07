@@ -165,3 +165,43 @@ Public account/history reads are cached per worker for at most 30 seconds; succe
 mutations invalidate that worker's cache. Other workers and external edits become visible
 when their TTL expires. This is bounded eventual consistency, not a database transaction.
 Partial market valuations are labelled directly in the headline.
+
+
+## Watchlist market data, alert history, and prepared dashboards
+
+Both watchlists show latest available price/currency, trailing P/E, forward P/E,
+price/sales, target proximity, and targets. Proximity is the percentage change from
+observed value to target (`target / observed - 1`), with buy/trim conditions labelled
+separately. It is not a prediction. Missing/negative valuation multiples remain
+unavailable. Price targets are downside thresholds; the scanner uses today's low,
+while the website shows the provider's latest price. Fundamentals may be delayed.
+
+The private Watchlist & Alerts tab includes the latest 200 notification attempts.
+The private repository retains up to 1,000 attempts in `alerts/alert_history.json`.
+Recording begins with this version; earlier Discord messages are not backfilled.
+States distinguish intent, Discord acceptance, and failed/uncertain delivery.
+Acceptance is not proof of a saved target removal. The workflow publishes attempts
+with revision checks and ID-based merging. A killed runner before publication or
+an ambiguous Discord response can still leave incomplete history or duplicates.
+
+### Activate prepared snapshots
+
+After committing/pushing this change, run **Prepare dashboard snapshots** once in
+GitHub Actions (or select it in the private System Health workflow menu). It uses
+the existing private-repository variable/token; no new service is needed. The token
+needs Contents read/write on the private repository, as it already does for targets.
+The new workflow runs hourly at minute 7, 07:00–23:00 UTC on weekdays. It writes
+`portfolio/dashboard_snapshot.json` exclusively to the PRIVATE repository. The
+compressed bundle includes private values and must never be published as a static
+asset. Web routes expose explicit public projections; alert history requires auth.
+
+Prepared holdings/analytics cover all account/currency/ETF/period selections.
+A single shared price-history download serves those calculations. Account digests
+invalidate prepared holdings after any recorded account edit. Existing live reads
+remain the fallback if preparation is missing, expired, or based on older accounts.
+Prepared data expires after two hours on weekdays; the weekend/Monday-before-07:00
+allowance is 96 hours. Market quotes/fundamentals for watchlist tickers come from the
+same background job and display their available timestamps. A newly added ticker
+shows unavailable quotes until the next successful preparation; configured targets
+always remain visible. This improves repeated page loads but does not eliminate a
+Render cold start or GitHub API latency. Portfolio return methodology is unchanged.

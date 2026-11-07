@@ -413,6 +413,7 @@ def workflow_dispatch():
     workflow = str(body.get("workflow", "")).strip()
 
     allowed = {
+        "dashboard_snapshots.yml",
         "stock_checker.yml",
         "watchlist_manager.yml",
         "earnings_report.yml",
@@ -602,6 +603,77 @@ def public_watchlist_get():
         }), 502
 
 
+def _prepared_bundle():
+    from prepared import PATH, unpack
+    from public_cache import cached
+    cfg = config()
+    def read():
+        try:
+            bundle, _ = get_file(PATH, data=True)
+            return unpack(bundle)
+        except (requests.RequestException, ValueError, KeyError, TypeError, RuntimeError, OSError):
+            return {}
+    return cached(('prepared', cfg['data_repo'], cfg['data_branch'], cfg['token']), read)
+
+
+def _prepared_result(section, key, us, dk):
+    from prepared import select
+    result = select(_prepared_bundle(), section, key, us, dk)
+    if result is not None:
+        # Explicit public projections: the private bundle is never an API response.
+        allowed = ({'holdings', 'sectors', 'basis', 'missing_tickers', 'quote_dates',
+                    'market_data_through', 'stale_tickers', 'as_of', 'positions_as_of',
+                    'account', 'currency', 'include_etfs'} if section == 'public' else
+                   {'period', 'account', 'currency', 'include_etfs', 'performance', 'spy',
+                    'gainers', 'performance_note', 'available_from', 'performance_through',
+                    'missing_tickers', 'spy_selected_period'} if section == 'analytics' else None)
+        if allowed:
+            result = {k: v for k, v in result.items() if k in allowed}
+    return result
+
+
+@app.get('/api/private/alert-history')
+def alert_history_get():
+    error = require_auth()
+    if error:
+        return error
+    try:
+        try:
+            events, _ = get_file('alerts/alert_history.json', data=True)
+        except requests.HTTPError as exc:
+            if exc.response is None or exc.response.status_code != 404:
+                raise
+            events = []
+        allowed = {'id', 'created_at', 'updated_at', 'ticker', 'metric', 'direction',
+                   'target', 'actual', 'status'}
+        response = jsonify({'events': [{k: v for k, v in event.items() if k in allowed}
+                                      for event in sorted(events, key=lambda x: x['created_at'], reverse=True)[:200]]})
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
+    except (requests.RequestException, ValueError, KeyError, TypeError, RuntimeError):
+        app.logger.exception('Private alert history unavailable')
+        return jsonify({'error': 'Could not load alert history.'}), 502
+
+
+@app.get('/api/public/watchlist-market')
+def watchlist_market_get():
+    from prepared import select
+    from watchlist_market import enrich
+    try:
+        targets, _ = get_file('alerts/watchlist.json', data=True)
+        targets = validate_watchlist(targets)
+        bundle = _prepared_bundle()
+        rows = {}
+        for ticker, entry in targets.items():
+            market = select(bundle, 'watchlist', ticker)
+            rows[ticker] = enrich(entry, market)
+        response = jsonify(rows)
+        response.headers['Cache-Control'] = 'public, max-age=30'
+        return response
+    except (requests.RequestException, ValueError, KeyError, TypeError, RuntimeError):
+        return jsonify({'error': 'Watchlist market data unavailable.'}), 502
+
+
 def _account_documents():
     # Only public reads are cached; authenticated views read through after edits.
     def build():
@@ -656,7 +728,9 @@ def public_analytics_get():
     try:
         from account_public import analytics
         us, dk = _account_documents()
-        response = jsonify(analytics(us, dk, account, period, _private_csv, currency=currency, include_etfs=include_etfs))
+        key = f'{account}:{currency}:{int(include_etfs)}:{period}'
+        result = _prepared_result('analytics', key, us, dk)
+        response = jsonify(result if result is not None else analytics(us, dk, account, period, _private_csv, currency=currency, include_etfs=include_etfs))
         response.headers["Cache-Control"] = "public, max-age=60"
         return response
     except (requests.RequestException, RuntimeError, ValueError, TypeError,
@@ -675,7 +749,9 @@ def public_analytics_snapshot_get():
     try:
         from account_public import snapshot
         us, dk = _account_documents()
-        response = jsonify(snapshot(us, dk, account, currency=currency, include_etfs=(etf_mode == "included")))
+        key = f'{account}:{currency}:{int(etf_mode == "included")}'
+        prepared_result = _prepared_result('public', key, us, dk)
+        response = jsonify(prepared_result if prepared_result is not None else snapshot(us, dk, account, currency=currency, include_etfs=(etf_mode == "included")))
         response.headers["Cache-Control"] = "public, max-age=60"
         return response
     except (requests.RequestException, RuntimeError, ValueError, TypeError,
@@ -736,7 +812,9 @@ def private_holdings_snapshot_get():
     try:
         from private_holdings import private_snapshot
         us, dk = _account_documents()
-        result = jsonify(private_snapshot(us, dk, account, currency, etfs == 'included'))
+        key = f'{account}:{currency}:{int(etfs == "included")}'
+        prepared_result = _prepared_result('private', key, us, dk)
+        result = jsonify(prepared_result if prepared_result is not None else private_snapshot(us, dk, account, currency, etfs == 'included'))
         result.headers['Cache-Control'] = 'private, no-store'
         return result
     except Exception:
@@ -760,7 +838,9 @@ def private_holdings_analytics_get():
     try:
         from account_public import analytics
         us, dk = _account_documents()
-        result = jsonify(analytics(us, dk, account, period, _private_csv,
+        key = f'{account}:{currency}:{int(etfs == "included")}:{period}'
+        prepared_result = _prepared_result('analytics', key, us, dk)
+        result = jsonify(prepared_result if prepared_result is not None else analytics(us, dk, account, period, _private_csv,
                                    currency=currency, include_etfs=(etfs == 'included')))
         result.headers['Cache-Control'] = 'private, no-store'
         return result
