@@ -62,7 +62,7 @@ function privateRenderRealized(realized){
     }
 }
 function privateRenderSnapshot(s){
-    privateSet('private-market-value',privateMoney(s.market_value));
+    privateSet('private-market-value',(s.market_value_partial?'Partial valuation: ':'')+privateMoney(s.market_value));
     privateSet('private-cost-basis',privateMoney(s.cost_basis));
     privateSet('private-unrealized',privateSignedMoney(s.unrealized_pl));
     privateColor(document.getElementById('private-unrealized'),s.unrealized_pl);

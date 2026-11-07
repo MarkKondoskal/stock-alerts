@@ -145,8 +145,8 @@ def session_prices(ticker):
 def check_prices():
     watchlist = load_watchlist()
     if not watchlist:
-        print("No tickers found in watchlist.")
-        return False
+        print("No targets to check.")
+        return True
 
     # Check tickers with either price or valuation targets.
     symbols = [symbol for symbol, entry in watchlist.items()
@@ -176,6 +176,9 @@ def check_prices():
         try:
             ticker = data.tickers[symbol]
             current_price, day_low = session_prices(ticker)
+            if price_targets and current_price is None:
+                print(f"{symbol}: price check unavailable; no current-session bar (market may be closed).")
+                complete = False
             check_price = day_low or current_price
             remaining_prices = []
             for target in price_targets:

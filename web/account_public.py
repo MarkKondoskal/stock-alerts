@@ -159,15 +159,21 @@ def _gainers(positions,period):
     tickers=set(p['ticker'] for p in positions)
     history=_market_history(tickers,period)
     results=[]
+    end = max(history.get('SPY', {}) or {day for values in history.values() for day in values}, default=None)
+    start = (date(date.today().year - 1, 12, 31) if period == 'YTD' else
+             date.fromisoformat(end)-timedelta(days=PERIODS[period]) if end and PERIODS[period] else date.min)
     for ticker in tickers:
         observations = sorted(history.get(ticker, {}).items())
-        baseline = observations[0][1] if observations else 0
-        rows = [(day, (value / baseline - 1) * 100, (value / baseline - 1) * 100)
-                for day, value in observations] if baseline > 0 else []
-        # Use the same baseline rules as the portfolio chart, not the fetch buffer.
-        selected = _select_period(rows, period)
-        if selected:
-            results.append({'ticker': ticker, 'return_pct': round(selected[-1]['portfolio'], 2)})
+        if not observations or observations[-1][0] != end:
+            continue
+        candidates = [item for item in observations if date.fromisoformat(item[0]) <= start]
+        first = observations[0] if period == 'ALL' else candidates[-1] if candidates else None
+        if first is None or first[0] == end or first[1] <= 0:
+            continue
+        if period != 'ALL' and (start-date.fromisoformat(first[0])).days > 5:
+            continue
+        results.append({'ticker': ticker, 'return_pct': round((observations[-1][1]/first[1]-1)*100, 2),
+                        'from': first[0], 'through': end})
     return sorted(results,key=lambda x:-x['return_pct'])
 
 def _fx_levels(nordnet_text):

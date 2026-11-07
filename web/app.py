@@ -603,9 +603,16 @@ def public_watchlist_get():
 
 
 def _account_documents():
-    us, _ = get_file("portfolio/merrill_portfolio.json", data=True)
-    dk, _ = get_file("portfolio/nordnet_portfolio.json", data=True)
-    return us, dk
+    # Only public reads are cached; authenticated views read through after edits.
+    def build():
+        us, _ = get_file("portfolio/merrill_portfolio.json", data=True)
+        dk, _ = get_file("portfolio/nordnet_portfolio.json", data=True)
+        return us, dk
+    if request.path.startswith('/api/public/'):
+        from public_cache import cached
+        cfg = config()
+        return cached(('accounts', cfg['data_repo'], cfg['data_branch'], cfg['token']), build)
+    return build()
 
 
 def _private_csv(path):
@@ -626,6 +633,10 @@ def _private_csv(path):
         response.raise_for_status()
         return base64.b64decode(response.json()["content"]).decode("utf-8")
 
+    if request.path.startswith('/api/public/'):
+        from public_cache import cached
+        cfg = config()
+        return cached(('history', path, cfg['data_repo'], cfg['data_branch'], cfg['token']), lambda: read_history(path, fetch))
     return read_history(path, fetch)
 
 
@@ -1002,6 +1013,15 @@ def public_sentiment_get():
     except Exception:
         app.logger.exception("Market sentiment temporarily unavailable")
         return jsonify({"error": "Market sentiment sources temporarily unavailable."}), 502
+
+
+@app.after_request
+def invalidate_public_reads(response):
+    if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') and response.status_code < 300:
+        from public_cache import clear
+        clear()
+    return response
+
 
 if __name__ == "__main__":
     # Local development only. Use Gunicorn for deployment.

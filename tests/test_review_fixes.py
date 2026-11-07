@@ -76,7 +76,7 @@ class ReviewFixes(unittest.TestCase):
                 'NEW': {'2026-10-20': 50, '2026-10-31': 100}}
         with patch.object(account_public, '_market_history', return_value=data):
             self.assertEqual(account_public._gainers([{'ticker': 'X'}, {'ticker': 'NEW'}], '1M'),
-                             [{'ticker': 'X', 'return_pct': 10}])
+                             [{'ticker': 'X', 'return_pct': 10, 'from': '2026-10-01', 'through': '2026-10-31'}])
 
     def test_old_quotes_are_excluded_and_dates_retained(self):
         today = date.today()

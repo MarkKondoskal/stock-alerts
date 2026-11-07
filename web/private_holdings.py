@@ -108,6 +108,7 @@ def private_snapshot(us, dk, account='combined', currency='USD', include_etfs=Fa
         'holdings': holdings,
         'position_count': len(positions), 'ticker_count': len(rows),
         'market_value': round(total_value, 2),
+        'market_value_partial': not complete_prices,
         'realized': realized,
         'total_pl': total_pl,
         'total_pl_partial': unrealized is None or bool(realized['missing']),

@@ -152,3 +152,16 @@ Delivery and persistence remain separate operations: a process crash or uncertai
 response after Discord accepts a message can still cause a duplicate. Concurrent removal
 and re-addition of an identical ticker/metric/direction/target cannot be distinguished in
 the current set-based watchlist format. No claim of exactly-once delivery is made.
+
+
+### Follow-up hardening
+
+An empty watchlist is a successful no-op. A price target without a current-session
+bar is reported as unavailable and fails the scan conservatively; this may also
+occur before opening or on holidays. Exchange-calendar classification is not implemented.
+Gainers require the common latest observation date and expose their baseline/end dates.
+Private holdings tests use synthetic fixtures by default, so CI runs them without secrets.
+Public account/history reads are cached per worker for at most 30 seconds; successful
+mutations invalidate that worker's cache. Other workers and external edits become visible
+when their TTL expires. This is bounded eventual consistency, not a database transaction.
+Partial market valuations are labelled directly in the headline.

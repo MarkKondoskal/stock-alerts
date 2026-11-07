@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 import requests
 
@@ -47,11 +48,24 @@ def merge_changes(base, local, remote):
     return result
 
 
+def request_with_retry(method, url, **kwargs):
+    for attempt in range(3):
+        try:
+            response = getattr(requests, method)(url, **kwargs)
+        except (requests.Timeout, requests.ConnectionError):
+            if attempt == 2:
+                raise
+        else:
+            if response.status_code not in (429, 500, 502, 503, 504) or attempt == 2:
+                return response
+        time.sleep(2 ** attempt)
+
+
 def publish(base, local, repo, branch, token):
     url = f'https://api.github.com/repos/{repo}/contents/alerts/watchlist.json'
     headers = {'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json'}
     for attempt in range(5):
-        response = requests.get(url, params={'ref': branch}, headers=headers, timeout=20)
+        response = request_with_retry("get", url, params={'ref': branch}, headers=headers, timeout=20)
         response.raise_for_status()
         current = response.json()
         remote = json.loads(base64.b64decode(current['content']))
@@ -59,7 +73,7 @@ def publish(base, local, repo, branch, token):
         if merged == validate_watchlist(remote):
             return
         content = base64.b64encode((json.dumps(merged, indent=2, allow_nan=False)+'\n').encode()).decode()
-        response = requests.put(url, headers=headers, timeout=20,
+        response = request_with_retry("put", url, headers=headers, timeout=20,
                                 json={'message': 'Update private watchlist targets', 'branch': branch,
                                       'sha': current['sha'], 'content': content})
         if response.status_code == 409:

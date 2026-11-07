@@ -13,7 +13,7 @@ from private_holdings import private_snapshot
 import account_public
 
 FIX = Path(os.getenv('STOCKALERTS_TEST_ACCOUNT_DIR',
-                     ROOT.parent / 'stock-alerts-private-data-main' / 'portfolio'))
+                     ROOT / 'tests' / 'fixtures'))
 
 
 def sample_accounts():
@@ -28,7 +28,7 @@ class PrivateHoldingsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if not (FIX / 'merrill_portfolio.json').is_file() or not (FIX / 'nordnet_portfolio.json').is_file():
-            raise unittest.SkipTest('Set STOCKALERTS_TEST_ACCOUNT_DIR to the private portfolio directory')
+            raise RuntimeError('Required account test fixtures are missing')
         cls.us, cls.dk = sample_accounts()
 
     @staticmethod

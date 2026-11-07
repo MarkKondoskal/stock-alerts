@@ -1,0 +1,18 @@
+{
+  "positions_as_of": "2026-01-02",
+  "positions": [
+    {
+      "ticker": "AMZN",
+      "quantity": 3,
+      "average_cost_per_share": 50,
+      "cost_currency": "USD"
+    },
+    {
+      "ticker": "VOO",
+      "quantity": 2,
+      "average_cost_per_share": 70,
+      "cost_currency": "USD"
+    }
+  ],
+  "transactions": []
+}

@@ -1,0 +1,18 @@
+{
+  "positions_as_of": "2026-01-02",
+  "positions": [
+    {
+      "ticker": "NOVO-B.CO",
+      "quantity": 4,
+      "average_cost_per_share": 200,
+      "cost_currency": "DKK"
+    },
+    {
+      "ticker": "AMZN",
+      "quantity": 1,
+      "average_cost_per_share": 60,
+      "cost_currency": "USD"
+    }
+  ],
+  "transactions": []
+}
