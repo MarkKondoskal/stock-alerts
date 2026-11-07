@@ -33,6 +33,10 @@ test('directional distances, unavailable values and prices are safe', () => {
   assert.ok(output.includes('20.0% fall needed'));
   assert.ok(output.includes('60.0% rise needed'));
   assert.ok(ui.proximity(targets, {price: 70}).includes('Condition met'));
+  assert.ok(ui.proximity({price_targets:[96]}, {price:100}).includes('watch-near'));
+  assert.ok(ui.proximity({price_targets:[105]}, {price:100}).includes('watch-met'));
+  assert.ok(!ui.proximity({price_targets:[90]}, {price:100}).includes('watch-near'));
+  assert.ok(!ui.valuations({}).includes('Latest provider fundamentals'));
   assert.ok(!ui.proximity(targets, {}).includes('NaN'));
   assert.ok(Math.abs(ui.nearest(targets, {price: 100}) - 0.2) < 1e-10);
   assert.equal(ui.nearest(targets, {}), Infinity);

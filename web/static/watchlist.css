@@ -1,1 +1,22 @@
 .watch-metric,.watch-rule{display:block;white-space:nowrap;margin:4px 0}.watch-market-date{display:block;max-width:225px;font-size:11px;line-height:1.4;color:#a1a1aa;margin-top:6px}.watch-met{color:#4ade80}.watch-target-editor{min-width:215px}.watch-target-editor label{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:7px 0}.watch-target-editor input{max-width:135px}.watch-summary{cursor:pointer;color:#a5b4fc}.alert-history-table{width:100%;border-collapse:collapse}.alert-history-table td,.alert-history-table th{text-align:left;padding:10px;border-bottom:1px solid #333}.watch-row-note{font-size:12px;color:#a1a1aa}
+
+/* Watchlist polish shared by the public and private dashboards. */
+.watch-metric,.watch-rule{margin:2px 0;line-height:1.5}
+.watch-metric{color:#a1a1aa;font-variant-numeric:tabular-nums}
+.watch-metric b{color:#f4f4f5;font-weight:600}
+.watch-rule{color:#a1a1aa;font-variant-numeric:tabular-nums}
+.watch-rule-label{color:#a1a1aa}
+.watch-near .watch-rule-distance{color:#fbbf24;font-weight:600}
+.watch-met .watch-rule-distance{color:#4ade80;font-weight:600}
+.watch-market-date{font-size:10px;margin-top:4px;line-height:1.4;max-width:190px}
+#watchlistPanel .public-table th,#watchlistPanel .public-table td,
+#watchlist #watchlist-rows td{padding:10px 16px;vertical-align:middle}
+#watchlistPanel .public-table th,#watchlist table th{font-size:11px;letter-spacing:.045em}
+.watch-table-note{margin:0;padding:10px 16px;border-bottom:1px solid #29292f;color:#a1a1aa;font-size:12px;line-height:1.6;white-space:normal}
+.watch-sort{display:inline-flex;align-items:center;gap:9px;font-size:12px;color:#a1a1aa;white-space:nowrap}
+#watchlistPanel .watch-sort{margin-left:auto}
+#watchlist-sort-public,#watchlist-sort-private{appearance:none;color-scheme:dark;font:inherit;color:#e4e4e7;background-color:#202025;border:1px solid #393941;border-radius:8px;min-height:36px;padding:8px 32px 8px 12px;cursor:pointer;background-image:linear-gradient(45deg,transparent 50%,#a1a1aa 50%),linear-gradient(135deg,#a1a1aa 50%,transparent 50%);background-position:calc(100% - 16px) 15px,calc(100% - 11px) 15px;background-size:5px 5px;background-repeat:no-repeat}
+#watchlist-sort-public:hover,#watchlist-sort-private:hover{border-color:#62626d;background-color:#29292f}
+#watchlist-sort-public:focus-visible,#watchlist-sort-private:focus-visible{outline:2px solid #a5b4fc;outline-offset:3px}
+#watchlist-sort-public option,#watchlist-sort-private option{background:#202025;color:#f4f4f5}
+@media(max-width:600px){#watchlistPanel .public-card-header{gap:10px;padding:14px 16px}#watchlistPanel .watch-sort{margin-left:0}#watchlistPanel .public-table td,#watchlist #watchlist-rows td{padding:9px 12px}.watch-table-note{padding:9px 12px}.watch-sort{flex-wrap:wrap}}

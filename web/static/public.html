@@ -343,7 +343,7 @@
             }
         }
     </style>
-<link rel="stylesheet" href="/static/watchlist.css?v=1"></head>
+<link rel="stylesheet" href="/static/watchlist.css?v=2"></head>
 
 <body>
     <main class="public-dashboard">
@@ -521,17 +521,18 @@
             <div class="public-card">
                 <div class="public-card-header">
                     <h2>Watchlist</h2>
-                    <label>Sort <select id="watchlist-sort-public"><option value="ticker">Ticker</option><option value="nearest">Closest to target</option></select></label><span id="watchlistCount" class="public-muted">
+                    <label class="watch-sort">Sort <select id="watchlist-sort-public"><option value="ticker">Ticker</option><option value="nearest">Closest to target</option></select></label><span id="watchlistCount" class="public-muted">
                         Loading…
                     </span>
                 </div>
 
+                <p class="watch-table-note" id="watchlist-data-note">Latest available quotes; provider fundamentals may be delayed. <strong>Near</strong> means within 5% of a target; <strong>Condition met</strong> uses the displayed price or multiple.</p>
                 <div class="public-table-wrap">
                     <table class="public-table">
                         <thead>
                             <tr>
                                 <th>Ticker</th>
-                                <th>Current price</th><th>Current valuation</th><th>Proximity</th><th>Price targets</th>
+                                <th>Latest price</th><th>Current valuation</th><th>Proximity</th><th>Price targets</th>
                                 <th>Valuation Targets</th>
                             </tr>
                         </thead>
@@ -573,7 +574,7 @@
         </footer>
     </main>
 
-    <script src="/static/stock_upgrades.js?v=trade-feed-2" defer></script><script src="/static/watchlist_ui.js?v=1" defer></script><script src="/static/public.js?v=watchlist-controls-1" defer></script>
+    <script src="/static/stock_upgrades.js?v=trade-feed-2" defer></script><script src="/static/watchlist_ui.js?v=2" defer></script><script src="/static/public.js?v=watchlist-controls-1" defer></script>
     <script src="/static/sentiment_ui.js?v=trade-journal-1" defer></script>
 </body>
 </html>

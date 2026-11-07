@@ -8,8 +8,7 @@
   }
   function valuations(market = {}) {
     return [['PE','P/E'],['FxPE','Forward P/E'],['P/S','P/S']].map(([key, label]) =>
-      `<span class="watch-metric">${label}: <b>${finite(market.valuations?.[key]) ? market.valuations[key].toFixed(2)+'×' : '—'}</b></span>`).join('') +
-      '<small class="watch-market-date">Latest provider fundamentals; may be delayed</small>';
+      `<span class="watch-metric">${label}: <b>${finite(market.valuations?.[key]) ? market.valuations[key].toFixed(2)+'×' : '—'}</b></span>`).join('');
   }
   function targetRules(entry) {
     const rules = (entry.price_targets || []).map(target => ['PRICE','buy',target]);
@@ -34,7 +33,8 @@
       if (!finite(actual) || !finite(target)) return `<span class="watch-rule">${esc(label)}: —</span>`;
       const met = direction === 'buy' ? actual <= target : actual >= target;
       const change = (target / actual - 1) * 100;
-      return `<span class="watch-rule ${met ? 'watch-met' : ''}">${esc(label)}: ${met ? 'Condition met' : `${Math.abs(change).toFixed(1)}% ${change < 0 ? 'fall' : 'rise'} needed`}</span>`;
+      const near = !met && Math.abs(change) <= 5 + 1e-9;
+      return `<span class="watch-rule ${met ? 'watch-met' : near ? 'watch-near' : ''}"><span class="watch-rule-label">${esc(label)}:</span> <span class="watch-rule-distance">${met ? 'Condition met' : `${near ? 'Near · ' : ''}${Math.abs(change).toFixed(1)}% ${change < 0 ? 'fall' : 'rise'} needed`}</span></span>`;
     }).join('') || '<span class="muted">No targets</span>';
   }
   root.WatchlistUI = {price, valuations, proximity, nearest};
