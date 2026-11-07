@@ -7,7 +7,7 @@ no cash, fees, accrued dividends or broker-reported realized P/L are included.
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from account_public import ETF_TICKERS, _positions, _quote_prices
+from account_public import ETF_TICKERS, _positions, _quote_prices, quote_metadata
 from realized_pl import trade_gains
 
 
@@ -123,6 +123,7 @@ def private_snapshot(us, dk, account='combined', currency='USD', include_etfs=Fa
         'positions_as_of': {key: document.get('positions_as_of') for key, document in
                             (('us', us), ('dk', dk)) if account in ('combined', key)},
         'as_of': datetime.now(timezone.utc).isoformat(),
+        **quote_metadata(prices),
         'valuation_basis': 'latest available closing prices; cash excluded',
         'cost_basis_note': 'Average open-position costs translated using the latest USD/DKK rate; not a tax or realized P/L statement.',
     }

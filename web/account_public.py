@@ -54,15 +54,41 @@ def _positions(us,dk,account,include_etfs=True):
     return positions
 
 def _market_history(tickers, period):
-    return _load_history(tickers,date.today()-timedelta(days=8 if period in ('1D','1W') else (PERIODS.get(period) or 3650)+8),
-                         period if period in ('1D','1W') else None)
+    today = date.today()
+    start = (date(today.year - 1, 12, 31) if period == 'YTD' else
+             today - timedelta(days=PERIODS.get(period) or 3650))
+    return _load_history(tickers, start - timedelta(days=8), None)
+
+
+class QuotePrices(dict):
+    """Prices with observation dates retained for freshness reporting."""
+    def __init__(self):
+        super().__init__()
+        self.dates = {}
+        self.stale = []
+
 
 def _quote_prices(tickers):
-    # USD/DKK is required for the combined account's weights.
-    history=_load_history(set(tickers)|{'DKK=X'},date.today()-timedelta(days=12),None)
-    prices={k: list(sorted(h.items()))[-1][1] for k,h in history.items() if h}
-    fx=prices.get('DKK=X')
-    return prices,fx
+    history = _load_history(set(tickers) | {'DKK=X'}, date.today()-timedelta(days=12), None)
+    prices = QuotePrices()
+    for ticker, observations in history.items():
+        if not observations:
+            continue
+        day, value = sorted(observations.items())[-1]
+        age = (date.today() - date.fromisoformat(day)).days
+        if age < 0 or age > 5 or _num(value) is None or value <= 0:
+            prices.stale.append(ticker)
+            continue
+        prices[ticker] = value
+        prices.dates[ticker] = day
+    return prices, prices.get('DKK=X')
+
+
+def quote_metadata(prices):
+    dates = getattr(prices, 'dates', {})
+    return {'quote_dates': dates, 'market_data_through': min(dates.values()) if dates else None,
+            'stale_tickers': sorted(getattr(prices, 'stale', []))}
+
 
 def snapshot(us,dk,account,currency="USD",include_etfs=False):
     positions=_positions(us,dk,account,include_etfs)
@@ -97,6 +123,7 @@ def snapshot(us,dk,account,currency="USD",include_etfs=False):
         result.sort(key=lambda x: (x['allocation_pct'] is None,-(x['allocation_pct'] or 0)))
         return {'holdings':result,'sectors':[{'sector':s,'allocation_pct':round(100*v/total,2)} for s,v in sorted(sector_values.items(),key=lambda x:-x[1])] if total else [],
                 'basis':'latest market value','missing_tickers':sorted(missing),
+                **quote_metadata(prices),
                 'as_of':datetime.now(timezone.utc).isoformat(),
                 # Snapshot dates are public metadata only; no raw trades/quantities.
                 'positions_as_of':{
@@ -133,9 +160,14 @@ def _gainers(positions,period):
     history=_market_history(tickers,period)
     results=[]
     for ticker in tickers:
-        vals=[v for _,v in sorted(history.get(ticker,{}).items())]
-        if len(vals)>=2 and vals[0]>0:
-            results.append({'ticker':ticker,'return_pct':round((vals[-1]/vals[0]-1)*100,2)})
+        observations = sorted(history.get(ticker, {}).items())
+        baseline = observations[0][1] if observations else 0
+        rows = [(day, (value / baseline - 1) * 100, (value / baseline - 1) * 100)
+                for day, value in observations] if baseline > 0 else []
+        # Use the same baseline rules as the portfolio chart, not the fetch buffer.
+        selected = _select_period(rows, period)
+        if selected:
+            results.append({'ticker': ticker, 'return_pct': round(selected[-1]['portfolio'], 2)})
     return sorted(results,key=lambda x:-x['return_pct'])
 
 def _fx_levels(nordnet_text):

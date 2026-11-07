@@ -517,7 +517,7 @@ async function updatePerformance() {
         }
         if (aligned.length < 2) {
             const freshness = document.getElementById('publicDataFreshness');
-            if (freshness) freshness.textContent = `Holdings snapshots: ${freshness.dataset.positionsDate || 'not available'} Â· Performance history unavailable for this selection.`;
+            if (freshness) freshness.textContent = `Holdings snapshots: ${freshness.dataset.positionsDate || 'not available'} Â· Market prices through: ${freshness.dataset.marketDataThrough || 'loading…'} · Performance history unavailable for this selection.`;
             if (analyticsCharts.performanceChart) analyticsCharts.performanceChart.destroy();
             delete analyticsCharts.performanceChart;
             for (const id of ["performanceReturn", "performanceDifference", "performancePortfolioPill", "performanceSpyPill"]) {
@@ -536,7 +536,7 @@ async function updatePerformance() {
             dataFreshness.dataset.performanceDate = comparisonEnd;
             const positionsDate = dataFreshness.dataset.positionsDate || 'not available';
             const pending = positionsDate.split(' / ').some(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && d > comparisonEnd);
-            dataFreshness.textContent = `Holdings snapshots: ${positionsDate} Â· Performance through: ${comparisonEnd}.` + (pending ? ' Historical return update pending.' : ' Returns refresh after private recalculation.');
+            dataFreshness.textContent = `Holdings snapshots: ${positionsDate} Â· Market prices through: ${dataFreshness.dataset.marketDataThrough || 'loading…'} · Performance through: ${comparisonEnd}.` + (pending ? ' Historical return update pending.' : ' Returns refresh after private recalculation.');
         }
         const primary = document.getElementById("performanceReturn");
         primary.textContent = performancePct(pLast);
@@ -638,6 +638,7 @@ async function loadFixedAllocation() {
             const freshness = document.getElementById('publicDataFreshness');
             if (freshness) {
                 const dates = Object.values(info.positions_as_of || {}).filter(Boolean);
+                freshness.dataset.marketDataThrough = info.market_data_through || 'unavailable';
                 const positionsDate = dates.length ? dates.map(d=>String(d).slice(0,10)).join(' / ') : 'not available';
                 freshness.dataset.positionsDate = positionsDate;
                 const performanceDate = freshness.dataset.performanceDate;

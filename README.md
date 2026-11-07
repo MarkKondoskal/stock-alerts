@@ -127,3 +127,28 @@ This project is for personal monitoring and informational purposes only, not fin
 A responsive dashboard is available in [`web/`](web/README.md). It reads the actual portfolio/watchlist files from this repository, saves watchlist edits back through the GitHub API, displays real GitHub Actions run history, and can send a server-side Discord webhook test. The dashboard does not replace the Python alert engine or scheduled workflows.
 
 See [`web/README.md`](web/README.md) for local setup, required environment variables, GitHub token permissions, and deployment notes. Never commit tokens, passwords, or Discord webhook URLs.
+
+
+## Reliability fixes and validation
+
+Watchlist readers and writers share strict ticker and positive finite target validation.
+Workflow publishing merges target additions/removals into the latest private revision;
+the dashboard still rejects outdated edits with a conflict rather than overwriting them.
+A failed Discord delivery or valuation request makes the stock scan fail while retaining
+undelivered targets. Price alerts use only the current exchange-local session bar; before
+open and on holidays, a previous session's low cannot trigger a new price alert.
+
+Gainers use daily observations and the same period baseline rules as portfolio charts,
+including the previous year's close for YTD. Snapshot responses retain quote dates;
+quotes older than five calendar days are excluded. The generated-at timestamp is not
+an assertion that market prices are live.
+
+Run `python -m unittest discover -s tests -v` and
+`node --test tests/watchlist_render.test.cjs`. To also exercise private-account fixture
+tests, set `STOCKALERTS_TEST_ACCOUNT_DIR` to your private repository's `portfolio` folder.
+The application regression workflow runs on pushes and pull requests without secrets.
+
+Delivery and persistence remain separate operations: a process crash or uncertain network
+response after Discord accepts a message can still cause a duplicate. Concurrent removal
+and re-addition of an identical ticker/metric/direction/target cannot be distinguished in
+the current set-based watchlist format. No claim of exactly-once delivery is made.

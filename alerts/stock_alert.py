@@ -1,3 +1,8 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from watchlist_rules import validate_watchlist
+
 import os
 import json
 import time
@@ -14,18 +19,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WATCHLIST_FILE = os.environ.get("STOCKALERTS_WATCHLIST_FILE") or os.path.join(BASE_DIR, "watchlist.json")
 
 
-def normalize_entry(entry):
-    # Backward compatibility with the old {"TICKER": [price targets]} format.
-    if isinstance(entry, list):
-        return {"price_targets": entry, "valuation_targets": {}}
-    if isinstance(entry, dict):
-        return {
-            "price_targets": entry.get("price_targets", entry.get("price", [])),
-            "valuation_targets": entry.get("valuation_targets", entry.get("valuation", {})),
-        }
-    return {"price_targets": [], "valuation_targets": {}}
-
-
 def load_watchlist():
     # A missing or invalid watchlist is a workflow failure, not an empty watchlist:
     # silently returning {} would mask configuration mistakes and lost alerts.
@@ -33,7 +26,7 @@ def load_watchlist():
         raw = json.load(f)
     if not isinstance(raw, dict):
         raise ValueError("watchlist.json must contain an object keyed by ticker")
-    return {str(symbol).strip().upper(): normalize_entry(entry) for symbol, entry in raw.items()}
+    return validate_watchlist(raw)
 
 
 def save_watchlist(watchlist):
@@ -130,6 +123,25 @@ def _metric_value(info, metric):
     keys = {"FxPE": "forwardPE", "PE": "trailingPE", "P/S": "priceToSalesTrailing12Months"}
     return _positive_number(info.get(keys[metric]))
 
+def session_prices(ticker):
+    """Only today's exchange-local daily bar can trigger a price alert."""
+    from datetime import datetime
+    history = ticker.history(period='5d', interval='1d', auto_adjust=False)
+    if history is None or history.empty:
+        raise ValueError('No dated price observations available')
+    stamp = history.index[-1]
+    if stamp.tzinfo is None:
+        raise ValueError('Quote has no exchange timezone')
+    if stamp.date() != datetime.now(stamp.tzinfo).date():
+        # Before open / on holidays there is no new session to scan.
+        return None, None
+    row = history.iloc[-1]
+    current, low = _positive_number(row['Close']), _positive_number(row['Low'])
+    if current is None or low is None:
+        raise ValueError('Current session quote is incomplete')
+    return current, low
+
+
 def check_prices():
     watchlist = load_watchlist()
     if not watchlist:
@@ -163,10 +175,7 @@ def check_prices():
         delivered_prices = []  # price targets Discord has already accepted
         try:
             ticker = data.tickers[symbol]
-            fast = ticker.fast_info
-            current_price = _positive_number(getattr(fast, "last_price", None)) or _positive_number(getattr(fast, "lastPrice", None))
-            day_low = _positive_number(getattr(fast, "day_low", None)) or _positive_number(getattr(fast, "dayLow", None))
-            complete = complete and current_price is not None
+            current_price, day_low = session_prices(ticker)
             check_price = day_low or current_price
             remaining_prices = []
             for target in price_targets:
@@ -175,6 +184,7 @@ def check_prices():
                         changed = True
                         delivered_prices.append(target)
                     else:
+                        complete = False
                         remaining_prices.append(target)
                 else:
                     remaining_prices.append(target)
@@ -185,6 +195,7 @@ def check_prices():
                     info = ticker.get_info() or {}
                 except Exception as exc:
                     print(f"Could not fetch valuation data for {symbol}; keeping valuation targets: {exc}")
+                    complete = False
                     info = None
                 for metric, raw_targets in valuation_targets.items():
                     # Legacy lists mean trim thresholds.
@@ -201,6 +212,7 @@ def check_prices():
                                 if send_valuation_alert(symbol, metric, direction, float(target), float(actual), current_price):
                                     changed = True
                                 else:
+                                    complete = False
                                     keep[direction].append(target)
                             else:
                                 keep[direction].append(target)

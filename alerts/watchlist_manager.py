@@ -1,9 +1,12 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from watchlist_rules import validate_watchlist, ticker_symbol, positive_target
+
 import json
 import math
 import os
-import sys
 from datetime import datetime, timezone
-from pathlib import Path
 
 import requests
 import yfinance as yf
@@ -26,53 +29,6 @@ def canonical_metric(metric):
     return METRIC_LABELS[key]
 
 
-def _valid_positive_numbers(values):
-    result = []
-    if not isinstance(values, (list, tuple, set)):
-        return result
-    for value in values:
-        try:
-            number = float(value)
-        except (TypeError, ValueError):
-            continue
-        if math.isfinite(number) and number > 0:
-            result.append(number)
-    return sorted(set(result))
-
-
-def _normalize_entry(entry):
-    """Normalize legacy targets and directional valuation targets.
-
-    Canonical schema: valuation_targets[metric] = {"trim": [...], "buy": [...]}.
-    Legacy metric lists are treated as trim thresholds for backward compatibility.
-    """
-    if isinstance(entry, (list, tuple)):
-        return {"price_targets": _valid_positive_numbers(entry), "valuation_targets": {}}
-    if not isinstance(entry, dict):
-        return {"price_targets": [], "valuation_targets": {}}
-    price_values = entry.get("price_targets", entry.get("price", []))
-    raw_valuations = entry.get("valuation_targets", entry.get("valuation", {}))
-    normalized = {}
-    if isinstance(raw_valuations, dict):
-        for raw_metric, raw_targets in raw_valuations.items():
-            try:
-                metric = canonical_metric(raw_metric)
-            except ValueError:
-                continue
-            if metric == "PRICE":
-                continue
-            # Existing [35] format means trim at/above 35x.
-            if isinstance(raw_targets, dict):
-                trim = _valid_positive_numbers(raw_targets.get("trim", []))
-                buy = _valid_positive_numbers(raw_targets.get("buy", []))
-            else:
-                trim = _valid_positive_numbers(raw_targets)
-                buy = []
-            if trim or buy:
-                normalized[metric] = {"trim": trim, "buy": buy}
-    return {"price_targets": _valid_positive_numbers(price_values), "valuation_targets": normalized}
-
-
 def load_watchlist():
     try:
         raw = json.loads(WATCHLIST_FILE.read_text(encoding="utf-8"))
@@ -82,22 +38,7 @@ def load_watchlist():
         print(f"Could not load watchlist {WATCHLIST_FILE}: {exc}")
         raise
 
-    result = {}
-    if not isinstance(raw, dict):
-        raise ValueError("watchlist.json must contain a JSON object keyed by ticker.")
-    # Normalize symbols and merge duplicates (e.g. 'AVGO' and 'AVGO ').
-    for raw_ticker, raw_entry in raw.items():
-        ticker = str(raw_ticker).strip().upper()
-        if not ticker:
-            continue
-        entry = _normalize_entry(raw_entry)
-        combined = result.setdefault(ticker, {"price_targets": [], "valuation_targets": {}})
-        combined["price_targets"] = sorted(set(combined["price_targets"] + entry["price_targets"]))
-        for metric, directions in entry["valuation_targets"].items():
-            merged = combined["valuation_targets"].setdefault(metric, {"trim": [], "buy": []})
-            for direction in ("trim", "buy"):
-                merged[direction] = sorted(set(merged[direction] + directions[direction]))
-    return result
+    return validate_watchlist(raw)
 
 
 def save_watchlist(data):
@@ -106,9 +47,9 @@ def save_watchlist(data):
 
 
 def add_target(ticker, target, metric="PRICE", direction="trim"):
-    ticker = ticker.strip().upper()
+    ticker = ticker_symbol(ticker)
     metric = canonical_metric(metric)
-    target = float(target)
+    target = positive_target(target)
     if not ticker or not math.isfinite(target) or target <= 0:
         raise ValueError("Ticker and target must be valid; target must be positive.")
 
@@ -136,9 +77,9 @@ def add_target(ticker, target, metric="PRICE", direction="trim"):
 
 
 def remove_target(ticker, target, metric="PRICE", direction="trim"):
-    ticker = ticker.strip().upper()
+    ticker = ticker_symbol(ticker)
     metric = canonical_metric(metric)
-    target = float(target)
+    target = positive_target(target)
     data = load_watchlist()
     if ticker not in data:
         print(f"Ticker {ticker} not found in watchlist.")
@@ -171,7 +112,7 @@ def remove_target(ticker, target, metric="PRICE", direction="trim"):
 
 
 def remove_all(ticker):
-    ticker = ticker.strip().upper()
+    ticker = ticker_symbol(ticker)
     data = load_watchlist()
     if ticker not in data:
         print(f"Ticker {ticker} not found.")

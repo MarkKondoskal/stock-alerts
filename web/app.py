@@ -6,6 +6,11 @@ Private portfolio/watchlist JSON files live in GITHUB_DATA_REPOSITORY.
 
 Never expose GitHub tokens or Discord webhooks in browser code.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from watchlist_rules import validate_watchlist
+
 import base64
 import hmac
 import json
@@ -235,66 +240,10 @@ def watchlist_put():
             "error": "Expected watchlist JSON object."
         }), 400
 
-    cleaned = {}
-
-    for raw_ticker, item in incoming.items():
-        ticker = str(raw_ticker).strip().upper()
-
-        if not ticker or not isinstance(item, dict):
-            return jsonify({
-                "error": "Each watchlist entry must be an object with a ticker."
-            }), 400
-
-        prices = item.get("price_targets", [])
-        vals = item.get("valuation_targets", {})
-
-        if not isinstance(prices, list) or not isinstance(vals, dict):
-            return jsonify({
-                "error": f"Invalid target format for {ticker}."
-            }), 400
-
-        try:
-            price_targets = [
-                float(value) for value in prices if str(value).strip()
-            ]
-
-            valuation_targets = {}
-
-            for metric, directions in vals.items():
-                if metric not in ("FxPE", "PE", "P/S"):
-                    continue
-                if not isinstance(directions, dict):
-                    raise ValueError(
-                        f"{ticker} {metric} targets must be an object."
-                    )
-
-                metric_targets = {}
-
-                for direction in ("trim", "buy"):
-                    values = directions.get(direction, [])
-
-                    if not isinstance(values, list):
-                        raise ValueError(
-                            f"{ticker} {metric} {direction} must be a list."
-                        )
-
-                    metric_targets[direction] = [
-                        float(value)
-                        for value in values
-                        if str(value).strip()
-                    ]
-
-                valuation_targets[metric] = metric_targets
-
-            cleaned[ticker] = {
-                "price_targets": price_targets,
-                "valuation_targets": valuation_targets,
-            }
-
-        except (ValueError, TypeError) as exc:
-            return jsonify({
-                "error": f"Invalid numeric target: {exc}"
-            }), 400
+    try:
+        cleaned = validate_watchlist(incoming)
+    except (ValueError, TypeError, OverflowError) as exc:
+        return jsonify({'error': str(exc)}), 400
 
     try:
         result = put_file(

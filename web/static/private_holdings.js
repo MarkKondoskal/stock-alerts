@@ -87,7 +87,7 @@ function privateRenderSnapshot(s){
     document.getElementById('private-holdings-rows').innerHTML=rows.join('')||'<tr><td colspan="11">No holdings in the selected view.</td></tr>';
     const missing=s.missing_tickers?.length?` Missing latest prices: ${s.missing_tickers.join(', ')}; the total excludes these positions.`:'';
     const costs=s.incomplete_cost_tickers?.length?` Missing cost basis: ${s.incomplete_cost_tickers.join(', ')}.`:'';
-    privateSet('private-valuation-note',`${s.valuation_basis}. ${s.cost_basis_note}${missing}${costs} No bank cash balances included.`);
+    privateSet('private-valuation-note',`${s.valuation_basis}. Market data through ${s.market_data_through||'unknown'}. ${s.stale_tickers?.length?'Stale quotes excluded: '+s.stale_tickers.join(', ')+'. ':''} ${s.cost_basis_note}${missing}${costs} No bank cash balances included.`);
     const active=(s.holdings||[]).filter(h=>h.market_value!==null);
     privateDoughnut('private-holdings-chart',active.map(h=>h.ticker),active.map(h=>h.market_value),active.map(h=>h.market_value));
     privateDoughnut('private-sector-chart',(s.sectors||[]).map(h=>h.sector),(s.sectors||[]).map(h=>h.market_value),(s.sectors||[]).map(h=>h.market_value));

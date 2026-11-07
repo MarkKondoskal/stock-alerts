@@ -44,6 +44,7 @@ class BugfixRegressionTests(unittest.TestCase):
         response = Mock(status_code=204)
         with patch.object(stock_alert, 'load_watchlist', return_value=state), \
              patch.object(stock_alert, 'save_watchlist') as saver, \
+             patch.object(stock_alert, 'session_prices', return_value=(80, 80)), \
              patch.object(stock_alert.yf, 'Tickers', create=True,
                           return_value=types.SimpleNamespace(tickers={'X': ticker})), \
              patch.object(stock_alert.requests, 'post', side_effect=[response,
