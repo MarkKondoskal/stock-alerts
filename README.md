@@ -1,7 +1,5 @@
 # StockAlerts
 
-[![Application tests](https://github.com/MarkKondoskal/stock-alerts/actions/workflows/tests.yml/badge.svg)](https://github.com/MarkKondoskal/stock-alerts/actions/workflows/tests.yml)
-
 StockAlerts is a personal stock-monitoring and portfolio dashboard built with Python, Flask, GitHub Actions, and Discord. It brings portfolio performance, watchlist targets, valuation metrics, trade records, and market context into a public dashboard and a password-protected private dashboard.
 
 **[Open the public dashboard](https://stock-alerts-9w0q.onrender.com/public)** · **[Private dashboard](https://stock-alerts-9w0q.onrender.com/)** · **[GitHub Actions](https://github.com/MarkKondoskal/stock-alerts/actions)**
