@@ -1,225 +1,329 @@
-# Stock Alerts & Watchlist Bot
+# StockAlerts
 
-A GitHub Actions-powered stock monitoring project that sends price-target and valuation alerts to Discord, publishes a compact watchlist table, and runs the project's other market, sentiment, earnings, and portfolio workflows.
+[![Application tests](https://github.com/MarkKondoskal/stock-alerts/actions/workflows/tests.yml/badge.svg)](https://github.com/MarkKondoskal/stock-alerts/actions/workflows/tests.yml)
 
-## Watchlist features
+StockAlerts is a personal stock-monitoring and portfolio dashboard built with Python, Flask, GitHub Actions, and Discord. It brings portfolio performance, watchlist targets, valuation metrics, trade records, and market context into a public dashboard and a password-protected private dashboard.
 
-- Price targets: alert when the intraday low reaches or falls below a target price.
-- Valuation targets using **Forward P/E (`FxPE`)**, **trailing P/E (`PE`)**, and **Price/Sales (`P/S`)**.
-- Two directions for every valuation metric:
-  - **TRIM**: alert when the valuation multiple is **at or above** the target (for example, MA Forward P/E ≥ 35x).
-  - **BUY**: alert when the valuation multiple is **at or below** the target (for example, MA Forward P/E ≤ 25x).
-- A ticker can have multiple price targets and multiple buy/trim valuation targets at the same time.
-- Missing valuation data does not trigger an alert or remove the target.
-- Targets are removed only after Discord accepts the alert. If delivery fails, the target remains for a later retry.
-- The Discord status post shows current price, price targets, PE, forward PE, P/S, and year-over-year revenue growth in a compact table. All tickers are included in one webhook message, split into continuation embeds only if Discord's message-size limits require it.
+**[Open the public dashboard](https://stock-alerts-9w0q.onrender.com/public)** · **[Private dashboard](https://stock-alerts-9w0q.onrender.com/)** · **[GitHub Actions](https://github.com/MarkKondoskal/stock-alerts/actions)**
 
-## How valuation alerts work
+Alerts are notifications. Recording a trade updates the project’s records; it does not place an order with a broker.
 
-The scanner uses Yahoo Finance/yfinance fundamentals. A **TRIM** target is triggered when the reported multiple is greater than or equal to the configured threshold. A **BUY** target is triggered when the reported multiple is less than or equal to the threshold. A valuation alert is based on the latest available fundamental data, which may update less frequently than the stock price. It is not a guarantee that the multiple or share price is real-time.
+## Dashboards
 
-## GitHub setup
+### Holdings and performance
 
-1. Push the repository to GitHub.
-2. Open **Settings → Secrets and variables → Actions**.
-3. Add the Discord webhook secrets used by the workflows in this repository. For the stock alert scanner, set `DISCORD_STOCK_WEBHOOK`. The watchlist manager accepts `DISCORD_WATCHLIST_WEBHOOK` or falls back to `DISCORD_STOCK_WEBHOOK`.
-4. Set the Actions variable STOCKALERTS_DATA_REPOSITORY to the private repository (OWNER/REPO), and set STOCKALERTS_DATA_BRANCH if its branch differs from main. Set the STOCKALERTS_DATA_TOKEN secret with Contents read/write permission on that repository.
-5. Run workflows manually once to confirm the secrets and permissions are correct.
+- Combined, US/Merrill, and DK/Nordnet account views.
+- USD and DKK display currencies, with ETF inclusion/exclusion controls.
+- Portfolio performance compared with SPY over matching dates.
+- Holdings and sector allocations based on available market values.
+- Biggest gainers and losers by individual stock-price return.
+- **Performance Drivers** below the gainers chart: up to five contributors and five detractors, based on historical holdings, including sold positions.
+- Quote dates, history dates, and missing-data indicators.
 
-Never commit webhook URLs or other credentials directly into source files.
+Performance Drivers follows the gainers-period selection and the shared account, currency, and ETF filters. Contributions are measured in **percentage points (pp)** of portfolio return. For example, a stock worth 10% of a portfolio that rises 20% contributes approximately **+2 pp**, assuming a constant weight. The implementation links daily historical contributions as holdings and weights change.
 
-## Add a target
+### Watchlist and alerts
 
-Open **Actions → Watchlist Manager → Run workflow**.
+Each row shows **latest price → valuation → target proximity → configured targets**.
 
-Inputs:
+- Latest available quote, currency, and observation time when provided.
+- Trailing P/E, forward P/E (`FxPE`), and price/sales (`P/S`).
+- Multiple price and valuation targets per ticker.
+- Percentage rise or fall needed to reach each target.
+- Amber **Near** labels for unmet targets within 5%; green **Condition met** labels when the displayed value satisfies the rule.
+- Sorting by ticker or closest target.
+- Expandable target editing on the private dashboard; public watchlists are read-only.
 
-- **Action**: `ADD`
-- **Ticker**: ticker symbol such as `MA`
-- **Target**: numeric share price or valuation multiple (enter `35`, not `35x`)
-- **Metric**: `PRICE`, `FxPE`, `PE`, or `P/S`
-- **Direction**: `TRIM` or `BUY`. Direction is relevant to valuation metrics; for `PRICE`, the existing behavior is a downside price target.
+### Private tools
 
-Examples:
+- Position quantities, market values, cost basis, and available realized/unrealized P/L.
+- Explicit partial-valuation labels when prices are missing.
+- Trade Manager for completed BUY, SELL, and SPLIT events, including supported fees and fee-currency conversion.
+- Request IDs to protect against duplicate trade submissions after uncertain responses.
+- Supported manual-trade corrections with replay of later manual entries and an audit record.
+- Trade journal notes, private by default, with optional public sharing.
+- Private stock-alert history showing notification attempts and delivery outcomes.
+- System Health with workflow history, last successful runs, data freshness, and approved manual workflow dispatch.
 
-| Goal | Metric | Target | Direction | Meaning |
-|---|---|---:|---|---|
-| Mastercard trim zone | `FxPE` | `35` | `TRIM` | Alert at forward P/E ≥ 35x |
-| Mastercard buy zone | `FxPE` | `25` | `BUY` | Alert at forward P/E ≤ 25x |
-| Buy-zone price alert | `PRICE` | `300` | `TRIM` (ignored for price) | Alert when price reaches $300 or lower |
-| High trailing P/E alert | `PE` | `40` | `TRIM` | Alert at trailing P/E ≥ 40x |
-| Low price-to-sales buy zone | `P/S` | `5` | `BUY` | Alert at P/S ≤ 5x |
+### Market context
 
-For valuation metrics, “TRIM” and “BUY” describe the valuation condition, not an automatic trade. The bot only sends a notification; it does not place trades.
+The Sentiment view includes VIX, Fear & Greed, economic readings, and an economic calendar. Data-source availability and cached readings are labelled. Background workflows also support portfolio earnings reports, economic alerts, and a weekday market-open heartbeat through Discord.
 
-## Remove targets
+## Architecture and privacy
 
-Use the same **Metric**, **Target**, and **Direction** inputs with action `REMOVE`. Direction must match the target being removed. Use `REMOVE_ALL` to remove all targets for a ticker. `LIST` prints stored targets to the workflow log; `STATUS` posts the current watchlist to Discord.
+The project uses two repositories:
 
-## Watchlist data format
+| Repository | Responsibility |
+|---|---|
+| `stock-alerts` | Public application source, web assets, alert scripts, tests, and application workflows |
+| `stock-alerts-private-data` | Private account records, transaction ledgers, watchlist state, alert history, calculations, and generated performance data |
 
-The shared watchlist lives in `alerts/watchlist.json` in the private data repository. The manager migrates older valuation lists as trim targets for backward compatibility. New valuation targets use this structure:
+```mermaid
+flowchart LR
+    Sources[Market and economic sources] --> Jobs[GitHub Actions]
+    Jobs --> Private[Private data repository]
+    Jobs --> Discord[Discord notifications]
+    Private --> Server[Flask on Render]
+    Server --> Public[Public dashboard]
+    Server --> Auth[Authenticated private dashboard]
+    Auth --> Server
+    Server --> Private
+```
+
+The server reads private files using a server-side GitHub token. Public endpoints return selected fields rather than raw account documents.
+
+- Public holdings expose tickers and allocation percentages, not quantities or account values.
+- Public Trade Activity intentionally exposes selected buy/sell information, including dates and permitted position-change bands. Journal notes are shared only when published.
+- Private quantities, money values, complete transaction records, and unpublished notes require authentication.
+- GitHub tokens, dashboard passwords, FRED keys, and Discord webhook URLs belong in environment variables or service secrets.
+
+**The prepared dashboard bundle contains private financial data. Keep it in the private repository; never copy it into `web/static/` or another public asset location.**
+
+The dashboard uses a shared password. It is intended as a personal tool deployed behind HTTPS, rather than a multi-user account system.
+
+## How alerts work
+
+| Metric | Direction | Trigger |
+|---|---|---|
+| Price | Downside target | The current exchange-local session’s low is at or below the target |
+| Forward P/E, P/E, P/S | BUY | Available positive multiple is at or below the target |
+| Forward P/E, P/E, P/S | TRIM | Available positive multiple is at or above the target |
+
+Targets are thresholds, not crossing-event subscriptions. For example, a valuation already below a BUY target can trigger on the next scan. `BUY` and `TRIM` describe notification conditions, not brokerage instructions.
+
+The website calculates proximity from the displayed latest price or multiple:
+
+```text
+Percentage move to target = (target / observed value - 1) × 100
+```
+
+A price alert can trigger on the session low even if the displayed latest price has since rebounded. A website label of “Condition met” is not proof that Discord accepted a message or that the target was removed.
+
+Missing, negative, or non-finite valuation multiples are unavailable and do not trigger valuation targets. Tickers and numeric targets are validated consistently across the editor and alert tools.
+
+After Discord accepts an alert, the scanner removes its target locally and the workflow publishes the update to the private repository. Failed or unconfirmed deliveries retain the target for retry. Revision-checked writes merge individual workflow target changes; outdated dashboard edits are rejected with a conflict.
+
+### Alert history and delivery limits
+
+The private Watchlist & Alerts view displays the latest 200 stock-alert attempts; up to 1,000 are retained in `alerts/alert_history.json`. It distinguishes pending, accepted, and failed/uncertain deliveries. Earlier messages are not backfilled, and this journal does not cover every sentiment, earnings, or economic notification.
+
+Discord delivery and repository persistence are separate operations. An interrupted runner or an uncertain network response can cause incomplete history or duplicate notifications. The set-based watchlist cannot distinguish removal and re-addition of an identical target during a concurrent edit. Exactly-once delivery is not guaranteed.
+
+## Setup
+
+### 1. Prepare the private data repository
+
+Keep account data in a private repository accessible to the application and workflows. Main paths are:
+
+```text
+alerts/
+  watchlist.json
+  alert_history.json             # Created when stock-alert attempts are recorded
+portfolio/
+  merrill_portfolio.json
+  nordnet_portfolio.json
+  marks_portfolio.json            # Legacy portfolio/earnings workflows
+  calculations/
+  performance/                   # Generated histories, summaries, attribution CSVs
+  dashboard_snapshot.json        # Generated private dashboard bundle
+```
+
+Import and reconcile real account records before running portfolio calculations. The public application’s synthetic test fixtures are examples for tests, not portfolio imports.
+
+The legacy `marks_portfolio.json` model remains separate from the Merrill/Nordnet account files. The legacy Marks Portfolio Manager does not update account-specific Trade Manager records.
+
+### 2. Configure GitHub Actions
+
+In the **code repository**, open **Settings → Secrets and variables → Actions**.
+
+| Type | Name | Purpose |
+|---|---|---|
+| Variable | `STOCKALERTS_DATA_REPOSITORY` | Private repository as `OWNER/REPOSITORY` |
+| Variable | `STOCKALERTS_DATA_BRANCH` | Private branch; defaults to `main` |
+| Secret | `STOCKALERTS_DATA_TOKEN` | Token with Contents read/write access to the selected private repository |
+| Secret | `DISCORD_STOCK_WEBHOOK` | Stock notifications and workflow watchlist status posts |
+| Secret | `DISCORD_SENTIMENT_WEBHOOK` | Sentiment notifications; also used by the economic-alert workflow |
+| Secret | `DISCORD_PORTFOLIO_WEBHOOK` | Legacy portfolio and earnings notifications |
+| Secret | `DISCORD_PORTFOLIO_TEST_WEBHOOK` | Market-open heartbeat |
+| Secret | `FRED_API_KEY` | FRED access for the economic-monitor workflow |
+
+Configure only the notification workflows you intend to use. For local Watchlist Manager runs, `DISCORD_WATCHLIST_WEBHOOK` can override the stock webhook.
+
+Allow workflow writes where generated state is committed, subject to repository and branch-protection policies. The private repository’s own performance workflow must be able to publish generated files to its configured branch.
+
+### 3. Run the web app locally
+
+Use Python 3.11 and install the application dependencies. From the repository root in PowerShell:
+
+```powershell
+python -m venv web/.venv
+.\web\.venv\Scripts\Activate.ps1
+python -m pip install -r web/requirements.txt
+Copy-Item web/.env.example web/.env
+```
+
+Edit `web/.env` with your own settings:
+
+```dotenv
+DASHBOARD_PASSWORD=your-long-unique-password
+GITHUB_TOKEN=your-repository-scoped-token
+GITHUB_REPOSITORY=OWNER/stock-alerts
+GITHUB_BRANCH=main
+GITHUB_DATA_REPOSITORY=OWNER/stock-alerts-private-data
+GITHUB_DATA_BRANCH=main
+DISCORD_STOCK_WEBHOOK=
+FRED_API_KEY=
+```
+
+The web token needs private Contents access for reads/writes and Actions access for the repositories whose runs it reads or workflows it dispatches. Dispatching private portfolio recalculation requires Actions write access to the private repository. Limit access to the required repositories.
+
+`DISCORD_STOCK_WEBHOOK` enables the web dashboard’s real Discord test. `FRED_API_KEY` enables supported server-side economic readings; it must be configured separately on Render even if the GitHub Actions secret already exists.
+
+```powershell
+python web/app.py
+```
+
+Open `http://127.0.0.1:8000/public` for the public view or `http://127.0.0.1:8000/` for the private login. Local `.env` files are ignored by Git; hosting environment variables take precedence.
+
+### 4. Deploy on Render
+
+Create or configure a Python web service from the code repository. With the repository root as the service root, use:
+
+```text
+Build command: pip install -r web/requirements.txt
+Start command: gunicorn --chdir web --bind 0.0.0.0:$PORT app:app
+```
+
+Set the web environment variables above in Render’s environment settings. Use HTTPS and keep secrets out of browser code. The app requires a Python server; GitHub Pages alone cannot run its authenticated API.
+
+### 5. Initialize generated data
+
+1. Run **Daily Portfolio Performance** in the private repository and confirm the histories and attribution files were generated successfully.
+2. Run **Prepare dashboard snapshots** in the code repository.
+3. Open the dashboard and check quote dates, performance dates, and System Health.
+4. Run notification workflows manually when ready; these can send actual Discord messages.
+
+The initial snapshot run is important after installation, especially on weekends when its automatic schedule is inactive.
+
+## Workflows
+
+Application definitions are in [`.github/workflows/`](.github/workflows/). Scheduled times are UTC unless noted; GitHub schedules can be delayed.
+
+| Workflow | Schedule / trigger | Responsibility |
+|---|---|---|
+| Stock & Sentiment Alert Pipeline | Every 15 minutes, 07:00–21:59 UTC, Monday–Friday; manual | Scan targets, preserve attempt history, publish target changes, run sentiment checks |
+| Prepare dashboard snapshots | Hourly at minute 7, 07:00–23:00 UTC, Monday–Friday; manual | Prepare dashboard and watchlist market data |
+| Watchlist Manager | Manual | Add/remove/list targets or post Discord status |
+| Portfolio Earnings Report | Hourly; manual | Report available portfolio earnings using legacy portfolio records |
+| US Economic Data Monitor | Hourly, Monday–Friday; manual | Check economic readings and FOMC information |
+| US Market Open Heartbeat | Weekdays at 09:30 America/New_York; manual | Send a Discord heartbeat; not an exchange-holiday calendar |
+| Marks Portfolio Manager | Manual | Maintain the separate legacy portfolio model |
+| Application regression tests | Pushes and pull requests | Run Python and JavaScript tests without production secrets |
+| Daily Portfolio Performance *(private repository)* | 23:15 UTC, Monday–Friday; manual | Rebuild account/combined histories and attribution inputs |
+
+## Managing targets
+
+Use the private **Watchlist & Alerts** editor, or select **Actions → Watchlist Manager → Run workflow**.
+
+Supported actions are `ADD`, `REMOVE`, `REMOVE_ALL`, `LIST`, and `STATUS`. Metrics are `PRICE`, `FxPE`, `PE`, and `P/S`. Direction applies to valuation rules; price targets always use the downside condition.
+
+Example private watchlist:
 
 ```json
 {
   "MA": {
-    "price_targets": [300.0],
+    "price_targets": [300],
     "valuation_targets": {
-      "FxPE": {
-        "trim": [35.0],
-        "buy": [25.0]
-      },
-      "P/S": {
-        "trim": [],
-        "buy": [5.0]
-      }
+      "FxPE": {"buy": [25], "trim": [35]},
+      "P/S": {"buy": [5], "trim": []}
     }
   }
 }
 ```
 
-The Watchlist Manager and stock checker commit changes to the private watchlist. If a dashboard save reports a conflict, reopen Watchlist and apply your changes to the latest version.
+For local CLI use, set `STOCKALERTS_WATCHLIST_FILE` to your private checkout’s watchlist, then run from the code repository root:
 
-## Workflows
-
-Workflow definitions are in `.github/workflows/`. Open the **Actions** tab to see each workflow and its schedule. The stock alert pipeline checks active price and valuation targets; the watchlist manager adds/removes targets and publishes the Discord table. Other workflows handle the project's earnings, economic, sentiment, heartbeat, and portfolio reporting tasks.
-
-## Legacy Discord portfolio and earnings workflows
-
-The Marks Portfolio Manager and Portfolio Earnings Report use the private data repository's portfolio/marks_portfolio.json. GitHub Actions provides the path through LEGACY_PORTFOLIO_FILE. For a local run, set that variable to your private checkout's portfolio file. Keep the portfolio file tracked in the private repository only.
-
-## Local testing
-
-To run the stock checker or Watchlist Manager locally, set STOCKALERTS_WATCHLIST_FILE to the private checkout’s alerts/watchlist.json. The scheduled workflows set this path automatically.
-
-Install Python 3.11 and dependencies:
-
-```bash
-pip install requests yfinance
-```
-
-Run the watchlist manager from the repository root:
-
-```bash
+```powershell
+$env:STOCKALERTS_WATCHLIST_FILE = "C:\path\to\private-repo\alerts\watchlist.json"
 python alerts/watchlist_manager.py LIST
-python alerts/watchlist_manager.py STATUS
-python alerts/watchlist_manager.py ADD MA 35 FxPE TRIM
 python alerts/watchlist_manager.py ADD MA 25 FxPE BUY
-python alerts/watchlist_manager.py REMOVE MA 35 FxPE TRIM
+python alerts/watchlist_manager.py ADD MA 35 FxPE TRIM
+python alerts/watchlist_manager.py REMOVE MA 25 FxPE BUY
 ```
 
-The `STATUS` action needs a valid Discord webhook environment variable. The stock scanner requires `DISCORD_STOCK_WEBHOOK`.
+`STATUS` sends a real Discord message and requires a webhook. Local scanner runs require a stock webhook; set `STOCKALERTS_ALERT_HISTORY_FILE` to a private path if you also want local attempt recording. Legacy portfolio scripts use `LEGACY_PORTFOLIO_FILE` for their private data path.
+
+## Data freshness and calculation limits
+
+### Prepared data
+
+Background preparation reduces market-data work during page requests. Snapshots are stored in the private repository and cover account, currency, ETF, and period selections. Account fingerprints reject prepared holdings/analytics after the source account records change.
+
+- Prepared data normally expires after two hours; the weekend/Monday-before-07:00 UTC allowance is 96 hours.
+- Holdings/analytics fall back to existing calculations when prepared results are missing or expired.
+- New watchlist tickers show unavailable market data until a successful preparation includes them.
+- **Refresh data reloads available data; it does not necessarily fetch a fresh market quote.** The quote timestamp describes the observation, not the time the page opened.
+- Prepared snapshots reduce repeated work but do not eliminate Render cold starts, GitHub latency, or upstream outages.
+
+### Performance methodology
+
+Returns are **provisional invested-securities returns**, not audited brokerage account returns. They use dated holdings and daily prices, with trades assumed effective at the end of the trade date.
+
+Important limitations include excluded idle cash and cash dividends, incomplete historical reinvestments/fractional shares, trading-fee exclusions in the historical return series, and the explicit Adobe exclusion in relevant US/combined histories. Corporate actions require reconciliation. Selected-currency views include the implemented USD/DKK conversion; this may differ from a broker’s execution or valuation conventions. SPY comparisons use price returns rather than dividend-reinvested total returns.
+
+Trade Manager can include recorded fees in position cost basis even though the historical performance series does not represent a complete fee-adjusted account return. Open-position costs and available realized amounts translated using latest FX are indicative values, not tax-lot accounting or tax statements.
+
+Performance Drivers inherits these limitations. Missing attribution intervals or a contribution total differing from the displayed return by more than 0.05 pp suppresses the chart until matching inputs are available. Displayed top/bottom bars are a subset of all contributors and need not sum to the total portfolio return.
+
+The price scanner requires a bar dated to the current exchange-local session. Missing current-session data fails conservatively for active price targets, including possible pre-market or holiday cases; an empty watchlist is a successful no-op. Exchange-calendar classification is not implemented.
+
+## Tests
+
+From the code repository root, with Python dependencies installed and Node.js available:
+
+```powershell
+python -m unittest discover -s tests -v
+node --test tests/watchlist_render.test.cjs tests/drivers_ui.test.cjs
+```
+
+CI runs all `tests/*.test.cjs` files. Tests use mocked services and synthetic account fixtures by default; they do not place trades or require production credentials. For additional checks using your private records, set `STOCKALERTS_TEST_ACCOUNT_DIR` to the private `portfolio` directory.
+
+From the private data repository root:
+
+```powershell
+python -m unittest discover -s portfolio/tests -v
+```
+
+Offline tests verify implementation behaviour; they do not prove live provider availability, deployed permissions, notification receipt, or broker reconciliation.
 
 ## Troubleshooting
 
-- **No Discord message:** check the relevant webhook secret and the GitHub Actions logs.
-- **Workflow cannot push changes:** check repository Actions permissions and branch protection rules.
-- **No valuation alert:** confirm the ticker has a target, the selected metric is available from Yahoo Finance, and the multiple has crossed the threshold in the correct direction.
-- **Valuation shown as `—`:** Yahoo Finance may not provide that multiple for the ticker. Missing data is kept as unavailable rather than treated as zero.
-- **Unexpected valuation:** provider fundamentals can be delayed, revised, or calculated differently by data vendors. Confirm important decisions independently.
-- **Duplicate alert after an uncertain network failure:** if Discord accepted a message but the connection failed before the workflow received confirmation, a retry can potentially send it again. The bot does not execute trades.
+| Symptom | Check |
+|---|---|
+| Watchlist prices say unavailable | Run **Prepare dashboard snapshots**; inspect its log and quote timestamps. A newly added ticker needs preparation. |
+| Performance Drivers is empty | Check attribution coverage, selected dates/currency/ETF mode, and the private performance workflow. Reconciliation failures are deliberately visible. |
+| Save reports a conflict | Reload the latest watchlist/account state and reapply the intended edit. |
+| No Discord alert | Check the target condition, source-data availability, webhook secret, workflow result, and private attempt history. |
+| Price-alert workflow fails before opening | No current-session bar may be available; inspect the log rather than assuming the target was checked. |
+| Economic readings are cached or unavailable | Configure `FRED_API_KEY` separately for Render and Actions; inspect source/schedule warnings. |
+| Holdings update but history lags | Run the private **Daily Portfolio Performance** workflow, then prepare dashboards again. |
+| First page load is slow | Check service cold-start behaviour and whether usable prepared data is available. |
+
+## Project layout
+
+```text
+.github/workflows/       Application schedules, manual actions, and CI
+.github/scripts/         Supporting Git state-publishing scripts
+alerts/                  Stock, sentiment, economic, heartbeat, and preparation tools
+portfolio/               Legacy portfolio and earnings scripts
+web/                     Flask API, projections, analytics, and deployment dependencies
+web/static/              Public/private pages, styles, charts, and shared renderers
+tests/                   Offline regressions and synthetic fixtures
+watchlist_rules.py       Shared watchlist validation
+```
+
+See [`web/.env.example`](web/.env.example) and the [workflow definitions](.github/workflows/) for the configuration consumed by the current code.
 
 ## Disclaimer
 
-This project is for personal monitoring and informational purposes only, not financial advice. Data may be delayed or inaccurate. Alerts are notifications, not buy/sell orders; independently verify data and make your own investment decisions.
-## Web dashboard (new)
-
-A responsive dashboard is available in [`web/`](web/README.md). It reads the actual portfolio/watchlist files from this repository, saves watchlist edits back through the GitHub API, displays real GitHub Actions run history, and can send a server-side Discord webhook test. The dashboard does not replace the Python alert engine or scheduled workflows.
-
-See [`web/README.md`](web/README.md) for local setup, required environment variables, GitHub token permissions, and deployment notes. Never commit tokens, passwords, or Discord webhook URLs.
-
-
-## Reliability fixes and validation
-
-Watchlist readers and writers share strict ticker and positive finite target validation.
-Workflow publishing merges target additions/removals into the latest private revision;
-the dashboard still rejects outdated edits with a conflict rather than overwriting them.
-A failed Discord delivery or valuation request makes the stock scan fail while retaining
-undelivered targets. Price alerts use only the current exchange-local session bar; before
-open and on holidays, a previous session's low cannot trigger a new price alert.
-
-Gainers use daily observations and the same period baseline rules as portfolio charts,
-including the previous year's close for YTD. Snapshot responses retain quote dates;
-quotes older than five calendar days are excluded. The generated-at timestamp is not
-an assertion that market prices are live.
-
-Run `python -m unittest discover -s tests -v` and
-`node --test tests/watchlist_render.test.cjs`. To also exercise private-account fixture
-tests, set `STOCKALERTS_TEST_ACCOUNT_DIR` to your private repository's `portfolio` folder.
-The application regression workflow runs on pushes and pull requests without secrets.
-
-Delivery and persistence remain separate operations: a process crash or uncertain network
-response after Discord accepts a message can still cause a duplicate. Concurrent removal
-and re-addition of an identical ticker/metric/direction/target cannot be distinguished in
-the current set-based watchlist format. No claim of exactly-once delivery is made.
-
-
-### Follow-up hardening
-
-An empty watchlist is a successful no-op. A price target without a current-session
-bar is reported as unavailable and fails the scan conservatively; this may also
-occur before opening or on holidays. Exchange-calendar classification is not implemented.
-Gainers require the common latest observation date and expose their baseline/end dates.
-Private holdings tests use synthetic fixtures by default, so CI runs them without secrets.
-Public account/history reads are cached per worker for at most 30 seconds; successful
-mutations invalidate that worker's cache. Other workers and external edits become visible
-when their TTL expires. This is bounded eventual consistency, not a database transaction.
-Partial market valuations are labelled directly in the headline.
-
-
-## Watchlist market data, alert history, and prepared dashboards
-
-Both watchlists show latest available price/currency, trailing P/E, forward P/E,
-price/sales, target proximity, and targets. Proximity is the percentage change from
-observed value to target (`target / observed - 1`), with buy/trim conditions labelled
-separately. It is not a prediction. Missing/negative valuation multiples remain
-unavailable. Price targets are downside thresholds; the scanner uses today's low,
-while the website shows the provider's latest price. Fundamentals may be delayed.
-
-The private Watchlist & Alerts tab includes the latest 200 notification attempts.
-The private repository retains up to 1,000 attempts in `alerts/alert_history.json`.
-Recording begins with this version; earlier Discord messages are not backfilled.
-States distinguish intent, Discord acceptance, and failed/uncertain delivery.
-Acceptance is not proof of a saved target removal. The workflow publishes attempts
-with revision checks and ID-based merging. A killed runner before publication or
-an ambiguous Discord response can still leave incomplete history or duplicates.
-
-### Activate prepared snapshots
-
-After committing/pushing this change, run **Prepare dashboard snapshots** once in
-GitHub Actions (or select it in the private System Health workflow menu). It uses
-the existing private-repository variable/token; no new service is needed. The token
-needs Contents read/write on the private repository, as it already does for targets.
-The new workflow runs hourly at minute 7, 07:00–23:00 UTC on weekdays. It writes
-`portfolio/dashboard_snapshot.json` exclusively to the PRIVATE repository. The
-compressed bundle includes private values and must never be published as a static
-asset. Web routes expose explicit public projections; alert history requires auth.
-
-Prepared holdings/analytics cover all account/currency/ETF/period selections.
-A single shared price-history download serves those calculations. Account digests
-invalidate prepared holdings after any recorded account edit. Existing live reads
-remain the fallback if preparation is missing, expired, or based on older accounts.
-Prepared data expires after two hours on weekdays; the weekend/Monday-before-07:00
-allowance is 96 hours. Market quotes/fundamentals for watchlist tickers come from the
-same background job and display their available timestamps. A newly added ticker
-shows unavailable quotes until the next successful preparation; configured targets
-always remain visible. This improves repeated page loads but does not eliminate a
-Render cold start or GitHub API latency. Portfolio return methodology is unchanged.
-
-
-## Performance Drivers
-
-The Holdings view on both dashboards includes Performance Drivers directly below
-Biggest gainers & losers. It follows the gainers-period selection plus the shared
-account, currency, and ETF filters. Bars show up to five positive contributors and
-five negative contributors in percentage points of the selected portfolio return.
-The input is the existing private historical attribution CSV, including positions
-sold during the period. Daily contributions are linked using the portfolio wealth
-index. Public output contains ticker symbols and contribution percentages only.
-
-Missing intervals or a total differing from the displayed return by more than
-0.05 percentage points suppress the chart until matching inputs are available.
-The chart retains the provisional securities-only methodology and exclusions of
-the portfolio history. Existing prepared snapshots without driver fields are
-supplemented from attribution inputs; future preparations include drivers directly.
-Run Python regression tests and `node --test tests/*.test.cjs` for validation.
+StockAlerts is a personal monitoring and record-keeping project for informational purposes. Data may be delayed, missing, or revised. Independently verify information before making investment decisions.
