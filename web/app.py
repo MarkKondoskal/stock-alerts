@@ -1105,6 +1105,75 @@ def public_sentiment_get():
         return jsonify({"error": "Market sentiment sources temporarily unavailable."}), 502
 
 
+def _research_document():
+    from research_library import PATH, initial
+    try:
+        return get_file(PATH, data=True)
+    except requests.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 404:
+            return initial(), 'new'
+        raise
+
+
+@app.get('/api/public/research')
+def research_public_get():
+    from research_library import public
+    try:
+        document, _ = _research_document()
+        response = jsonify(public(document))
+        response.headers['Cache-Control'] = 'public, max-age=30'
+        return response
+    except (requests.RequestException, ValueError, KeyError, TypeError, RuntimeError):
+        return jsonify({'error': 'Research is temporarily unavailable.'}), 502
+
+
+@app.get('/api/private/research')
+def research_private_get():
+    error = require_auth()
+    if error:
+        return error
+    try:
+        document, sha = _research_document()
+        response = jsonify(document)
+        response.set_etag(sha)
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
+    except (requests.RequestException, ValueError, KeyError, TypeError, RuntimeError):
+        return jsonify({'error': 'Could not load the research library.'}), 502
+
+
+@app.put('/api/private/research')
+def research_private_put():
+    error = require_auth()
+    if error:
+        return error
+    from research_library import PATH, validate
+    revisions = request.if_match.as_set()
+    sha = next(iter(revisions), '')
+    if len(revisions) != 1 or not (sha == 'new' or (len(sha) == 40 and all(c in '0123456789abcdef' for c in sha))):
+        return jsonify({'error': 'Reload Research before saving.'}), 428
+    try:
+        document = validate(request.get_json(silent=True))
+    except (ValueError, TypeError) as exc:
+        return jsonify({'error': str(exc)}), 400
+    try:
+        _, branch = repository_and_branch(data=True)
+        payload = {'message': 'Update research library', 'branch': branch,
+                   'content': base64.b64encode((json.dumps(document, indent=2, ensure_ascii=False)+'\n').encode()).decode()}
+        if sha != 'new':
+            payload['sha'] = sha
+        result = requests.put(repo_url(PATH, data=True), headers=gh_headers(), json=payload, timeout=20)
+        if result.status_code in (409, 422):
+            return jsonify({'error': 'Research changed elsewhere. Reload Research before retrying.'}), 409
+        result.raise_for_status()
+        response = jsonify(document)
+        response.set_etag(result.json()['content']['sha'])
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
+    except (requests.RequestException, ValueError, KeyError, TypeError, RuntimeError):
+        return jsonify({'error': 'Could not confirm the save. Reload Research before retrying.'}), 502
+
+
 @app.after_request
 def invalidate_public_reads(response):
     if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') and response.status_code < 300:

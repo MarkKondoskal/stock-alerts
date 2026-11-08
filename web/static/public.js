@@ -20,6 +20,8 @@ const elements = {
 
     watchlistTab: document.getElementById("watchlistTab"),
 
+    researchTab: document.getElementById("researchTab"),
+    researchPanel: document.getElementById("researchPanel"),
     sentimentTab: document.getElementById("sentimentTab"),
 
     holdingsPanel: document.getElementById("holdingsPanel"),
@@ -257,6 +259,7 @@ function activateTab(tabName, moveFocus = false) {
         ["activity", elements.tradeActivityTab, elements.tradeActivityPanel],
 
         ["sentiment", elements.sentimentTab, elements.sentimentPanel],
+        ["research", elements.researchTab, elements.researchPanel],
 
     ];
 
@@ -276,7 +279,7 @@ function activateTab(tabName, moveFocus = false) {
 
     const controls = document.querySelector('.account-switcher');
 
-    if (controls) controls.hidden = tabName === 'watchlist' || tabName === 'sentiment';
+    if (controls) controls.hidden = tabName === 'watchlist' || tabName === 'sentiment' || tabName === 'research';
 
     document.querySelectorAll('[data-holdings-control]').forEach(item => {
 
@@ -292,6 +295,7 @@ function activateTab(tabName, moveFocus = false) {
 
     }
 
+    if (tabName === 'research') window.Research.load('public');
     if (tabName === 'sentiment') window.StockSentiment?.load('public');
 
     if (tabName === 'activity') window.loadPublicTradeActivity(selectedAccount);
@@ -300,9 +304,9 @@ function activateTab(tabName, moveFocus = false) {
 
 
 
-const publicTabNames = ['holdings', 'activity', 'watchlist', 'sentiment'];
+const publicTabNames = ['holdings', 'activity', 'watchlist', 'sentiment', 'research'];
 
-const publicTabButtons = [elements.holdingsTab, elements.tradeActivityTab, elements.watchlistTab, elements.sentimentTab];
+const publicTabButtons = [elements.holdingsTab, elements.tradeActivityTab, elements.watchlistTab, elements.sentimentTab, elements.researchTab];
 
 publicTabButtons.forEach((button, index) => {
 

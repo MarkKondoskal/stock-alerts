@@ -325,3 +325,24 @@ See [`web/.env.example`](web/.env.example) and the [workflow definitions](.githu
 ## Disclaimer
 
 StockAlerts is a personal monitoring and record-keeping project for informational purposes. Data may be delayed, missing, or revised. Independently verify information before making investment decisions.
+
+
+## Research library
+
+The Research tab combines My research and a curated Reading list. Article cards
+show author/source credit, an optional date, ticker tags, and a short public summary,
+then link to the original article. Full posts remain on their original publication.
+The publication link is https://markkondoskal.substack.com. No RSS import, scraping,
+embedded article pages, or automatic Substack publishing is performed.
+
+The private Research manager adds, edits, or removes cards using revision-checked
+writes to `research/library.json` in the private data repository. New entries default
+to private. Only articles explicitly marked Public appear publicly; private notes
+are excluded from the public API. One public article can be featured. Saved drafts
+and private notes are not sent to Substack. Provide public URLs, not secret draft links.
+
+Until the library file is first saved, the app seeds a public intro card linking to
+https://markkondoskal.substack.com/p/first-substack. Its title/summary are based on
+the drafted introduction, and its optional publication date is left blank. These
+fields can be corrected in the private editor. Saving an empty library stays empty.
+A failed or unauthorized GitHub read does not silently restore the seed library.

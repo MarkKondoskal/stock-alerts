@@ -343,7 +343,7 @@
             }
         }
     </style>
-<link rel="stylesheet" href="/static/watchlist.css?v=2"></head>
+<link rel="stylesheet" href="/static/watchlist.css?v=2"><link rel="stylesheet" href="/static/research.css?v=1"></head>
 
 <body>
     <main class="public-dashboard">
@@ -395,10 +395,10 @@
             <button id="sentimentTab" class="public-tab" type="button" role="tab"
                 aria-selected="false" aria-controls="sentimentPanel" tabindex="-1">
                 Sentiment
-            </button>
+            </button><button id="researchTab" class="public-tab" type="button" role="tab" aria-selected="false" aria-controls="researchPanel" tabindex="-1">Research</button>
         </div>
 
-        <div id="publicMessage"
+        <section id="researchPanel" role="tabpanel" aria-labelledby="researchTab" hidden><div class="research-shell" id="research-public"><div class="research-heading"><div><h2>Research</h2><p>Company research, portfolio reflections, and selected reading. My own writing and recommendations from other authors, with links to the original articles.</p></div><a class="research-link" href="https://markkondoskal.substack.com" target="_blank" rel="noopener noreferrer">Visit my Substack ↗</a></div><div class="research-toolbar"><select data-research-filter aria-label="Research category"><option value="all">All</option><option value="own">My research</option><option value="reading">Reading list</option></select><input type="search" data-research-search placeholder="Search articles or tickers" aria-label="Search research"><button class="research-action" type="button" data-research-reload>Refresh research</button></div><p class="research-status" data-research-status role="status"></p><div class="research-grid" data-research-cards><p class="research-empty">Open Research to load the library.</p></div></div></section><div id="publicMessage"
              class="public-message"
              role="status"
              aria-live="polite"
@@ -580,7 +580,7 @@
         </footer>
     </main>
 
-    <script src="/static/stock_upgrades.js?v=trade-feed-2" defer></script><script src="/static/watchlist_ui.js?v=2" defer></script><script src="/static/drivers_ui.js?v=1" defer></script><script src="/static/public.js?v=performance-drivers-1" defer></script>
+    <script src="/static/stock_upgrades.js?v=trade-feed-2" defer></script><script src="/static/watchlist_ui.js?v=2" defer></script><script src="/static/drivers_ui.js?v=1" defer></script><script src="/static/research.js?v=1" defer></script><script src="/static/public.js?v=performance-drivers-1" defer></script>
     <script src="/static/sentiment_ui.js?v=trade-journal-1" defer></script>
 </body>
 </html>
