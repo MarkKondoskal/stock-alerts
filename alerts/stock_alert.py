@@ -183,8 +183,7 @@ def check_prices():
             ticker = data.tickers[symbol]
             current_price, day_low = session_prices(ticker)
             if price_targets and current_price is None:
-                print(f"{symbol}: price check unavailable; target kept for the next run.")
-                complete = False
+                print(f"{symbol}: price check skipped outside regular hours; target kept for the next run.")
             check_price = day_low or current_price
             remaining_prices = []
             for target in price_targets:
