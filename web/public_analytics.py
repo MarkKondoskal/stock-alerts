@@ -39,8 +39,8 @@ def _load_history(tickers, start, intraday):
     import pandas as pd
     tickers = sorted(set(tickers) | {"SPY"})
     if intraday == "1D":
-        raw = yf.download(tickers, period="1d", interval="5m", auto_adjust=False,
-                          progress=False, threads=False, group_by="ticker")
+        raw = yf.download(tickers, period="1d", interval="5m", auto_adjust=False, prepost=False,
+                          progress=False, threads=8, timeout=6, group_by="ticker")
     elif intraday == "1W":
         raw = yf.download(tickers, period="5d", interval="60m", auto_adjust=False,
                           progress=False, threads=False, group_by="ticker")

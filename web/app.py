@@ -832,6 +832,27 @@ def private_holdings_snapshot_get():
         return jsonify({'error': 'Could not load account values or market prices; retry later.'}), 502
 
 
+@app.get('/api/private/holdings/intraday')
+def private_holdings_intraday_get():
+    err = require_auth()
+    if err:
+        return err
+    account = request.args.get('account', 'combined').lower()
+    currency = request.args.get('currency', 'USD').upper()
+    etfs = request.args.get('etfs', 'excluded').lower()
+    if account not in ('combined', 'us', 'dk') or currency not in ('USD', 'DKK') or etfs not in ('excluded', 'included'):
+        return jsonify({'error': 'Invalid account, currency or ETF filter'}), 400
+    try:
+        from intraday_performance import intraday
+        us, dk = _account_documents()
+        response = jsonify(intraday(us, dk, account, currency, etfs == 'included'))
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
+    except Exception:
+        app.logger.exception('Private intraday performance unavailable')
+        return jsonify({'error': 'Intraday quotes are temporarily unavailable.'}), 502
+
+
 @app.get('/api/private/holdings/analytics')
 def private_holdings_analytics_get():
     """Read-only performance data; uses exactly the same series as /public."""

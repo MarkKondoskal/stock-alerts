@@ -106,36 +106,50 @@ async function privateLoadSnapshot(version){
         for(const id of ['private-holdings-chart','private-sector-chart'])privateEmptyChart(id);
     }
 }
-async function privateLoadPerformance(version){
+async function privateLoadPerformance(version, background=false){
     const requestId = ++privatePerformanceRequest;
     const {period}=privateHoldingsState;
-    privateSet('private-performance-note','Loading historical performance…');
+    const intraday=period==='1D';
+    if(!background) privateSet('private-performance-note',intraday?'Loading five-minute quotes…':'Loading historical performance…');
     try{
-        const result=await api('/api/private/holdings/analytics'+privateQuery(period));
+        const endpoint=intraday?'intraday':'analytics';
+        const result=await api('/api/private/holdings/'+endpoint+privateQuery(period));
         if(version!==privateHoldingsState.version||period!==privateHoldingsState.period||requestId!==privatePerformanceRequest)return;
         const spy=new Map((result.spy||[]).map(p=>[p.date,Number(p.value)]));
         const aligned=(result.performance||[]).filter(p=>spy.has(p.date));
         if(aligned.length<2){privateEmptyChart('private-performance-chart');
             privateSet('private-performance-return','—');privateSet('private-spy-difference','—');
-            privateSet('private-performance-baseline','Not enough verified history for this period');
+            privateSet('private-performance-baseline',intraday?'Waiting for two matched bars':'Not enough verified history for this period');
             privateSet('private-performance-note',result.performance_note||'Historical reconstruction is unavailable for this selection.');return;}
         const last=aligned[aligned.length-1],value=Number(last.value),benchmark=spy.get(last.date);
         privateSet('private-performance-return',privatePercent(value));privateColor(document.getElementById('private-performance-return'),value);
         privateSet('private-spy-difference',(value-benchmark>=0?'+':'')+privateNum(value-benchmark)+' pp');
         privateColor(document.getElementById('private-spy-difference'),value-benchmark);
-        privateSet('private-performance-baseline',`Both lines start at 0% on ${aligned[0].date} · Through ${last.date}`);
+        const clock=stamp=>new Date(stamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+        const localDate=new Date(aligned[0].date).toLocaleDateString();
+        privateSet('private-performance-baseline',intraday
+            ? '1D provisional · '+localDate+' · '+clock(aligned[0].date)+' to '+clock(last.date)
+            : 'Both lines start at 0% on '+aligned[0].date+' · Through '+last.date);
         privateChart('private-performance-chart','line',{
-            labels:aligned.map(p=>p.date),datasets:[
+            labels:aligned.map(p=>intraday?clock(p.date):p.date),datasets:[
                 {label:'Portfolio',data:aligned.map(p=>p.value),borderColor:'#2dd4bf',backgroundColor:'rgba(45,212,191,.10)',fill:true,borderWidth:2.5,pointRadius:0,tension:.16},
-                {label:'SPY · matched dates',data:aligned.map(p=>spy.get(p.date)),borderColor:'#bb92ef',borderWidth:2,pointRadius:0,tension:.16},
+                {label:intraday?'SPY · matched times':'SPY · matched dates',data:aligned.map(p=>spy.get(p.date)),borderColor:'#bb92ef',borderWidth:2,pointRadius:0,tension:.16},
             ]},{interaction:{intersect:false,mode:'index'},plugins:{legend:{display:true,labels:{color:'#bbb'}},
                 tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${privatePercent(c.parsed.y)}`}}},
                 scales:{x:{grid:{display:false},ticks:{color:'#92929f',maxTicksLimit:6,maxRotation:0}},
                     y:{position:'right',grid:{color:'#ffffff16'},ticks:{color:'#92929f',callback:n=>n+'%'}}}});
-        privateSet('private-performance-note',`Matched comparison: ${aligned[0].date} to ${last.date}. ${result.performance_note||''}`);
+        const freshness=intraday && result.oldest_quote_at
+            ? ' Oldest quote in latest point: '+clock(result.oldest_quote_at)+'. Refreshes every 5 minutes while visible.'
+            : '';
+        privateSet('private-performance-note',(result.performance_note||'')+freshness);
     }catch(error){if(version!==privateHoldingsState.version||requestId!==privatePerformanceRequest)return;
-        privateEmptyChart('private-performance-chart');privateSet('private-performance-return','—');privateSet('private-spy-difference','—');
-        privateSet('private-performance-note','Historical analytics unavailable: '+error.message);}
+        if(!background){
+            privateEmptyChart('private-performance-chart');
+            privateSet('private-performance-return','—');
+            privateSet('private-spy-difference','—');
+        }
+        privateSet('private-performance-note',(intraday?'Intraday refresh unavailable: ':'Historical analytics unavailable: ')+error.message);
+    }
 }
 async function privateLoadGainers(version){
     const requestId = ++privateGainersRequest;
@@ -185,3 +199,14 @@ privateBuildPeriods('private-gainers-periods',['1D','1W','1M','3M','6M','YTD','1
     const version=privateHoldingsState.version;
     privateLoadGainers(version).catch(e=>toast(e.message,'error'));
 });
+
+
+let privateIntradayRefreshing=false;
+setInterval(async ()=>{
+    const overview=document.getElementById('overview');
+    if(privateIntradayRefreshing || document.hidden || overview?.classList.contains('hidden')
+        || privateHoldingsState.period!=='1D') return;
+    privateIntradayRefreshing=true;
+    try{await privateLoadPerformance(privateHoldingsState.version,true);}
+    finally{privateIntradayRefreshing=false;}
+}, 5*60*1000);
