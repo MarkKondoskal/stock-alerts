@@ -295,11 +295,12 @@ The price scanner requires a complete bar dated to the current exchange-local se
 
 ## Tests
 
-From the code repository root, with Python dependencies installed and Node.js available:
+Run these commands from the code repository root with Python 3.11 and Node.js installed.
 
 ```powershell
+python -m pip install -r web/requirements.txt
 python -m unittest discover -s tests -v
-node --test tests/watchlist_render.test.cjs tests/drivers_ui.test.cjs
+node --test tests/drivers_ui.test.cjs tests/research_ui.test.cjs tests/watchlist_render.test.cjs
 ```
 
 CI runs all `tests/*.test.cjs` files. Tests use mocked services and synthetic account fixtures by default; they do not place trades or require production credentials. For additional checks using your private records, set `STOCKALERTS_TEST_ACCOUNT_DIR` to the private `portfolio` directory.
