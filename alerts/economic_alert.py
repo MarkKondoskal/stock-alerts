@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from fractions import Fraction
+from html import unescape
 import json
 import os
 import re
@@ -445,6 +447,26 @@ def check_fred_series(
 # FEDERAL RESERVE FOMC
 # ============================================================
 
+def parse_fomc_target_range(statement_html):
+    text = unescape(re.sub(r"<[^>]+>", " ", statement_html))
+    text = re.sub(r"\s+", " ", text)
+    rate = r"(\d+(?:\.\d+|\s*[-–−]\s*\d+/\d+)?)"
+    match = re.search(
+        r"target range for the federal funds rate.{0,150}?\b(?:at|to|of)\s+"
+        + rate + r"\s+to\s+" + rate + r"\s+percent\b",
+        text, flags=re.IGNORECASE,
+    )
+    if match is None:
+        return None
+
+    def parse_rate(value):
+        parts = re.split(r"\s*[-–−]\s*", value, maxsplit=1)
+        return float(parts[0]) + (float(Fraction(parts[1])) if len(parts) == 2 else 0.0)
+
+    lower, upper = map(parse_rate, match.groups())
+    return (lower, upper) if lower <= upper else None
+
+
 def fetch_latest_fomc_statement() -> dict | None:
     """
     Find the latest FOMC statement directly from the
@@ -525,102 +547,11 @@ def fetch_latest_fomc_statement() -> dict | None:
 
         return None
 
-    # --------------------------------------------------------
-    # Extract the FOMC decision.
-    #
-    # Example:
-    #
-    # "raise the target range for the federal funds rate
-    # by 1/4 percentage point to 3-3/4 to 4 percent"
-    # --------------------------------------------------------
-
-    pattern = (
-        r"target range for the federal funds rate"
-        r".{0,500}?"
-        r"to\s+"
-        r"([0-9]+(?:-[0-9]+)?(?:\s*[-–]\s*[0-9]+)?)"
-        r"\s+to\s+"
-        r"([0-9]+(?:\.[0-9]+)?)"
-        r"\s*percent"
-    )
-
-    match = re.search(
-        pattern,
-        statement_html,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-
-    if not match:
-
-        # The HTML may contain encoded whitespace or tags,
-        # so try a simpler version.
-        text = re.sub(
-            r"<[^>]+>",
-            " ",
-            statement_html,
-        )
-
-        text = re.sub(
-            r"\s+",
-            " ",
-            text,
-        )
-
-        match = re.search(
-            pattern,
-            text,
-            flags=re.IGNORECASE | re.DOTALL,
-        )
-
-    if not match:
-
-        print(
-            "⚠️ Could not extract the federal funds "
-            "target range from the FOMC statement."
-        )
-
+    rates = parse_fomc_target_range(statement_html)
+    if rates is None:
+        print("Could not extract the federal funds target range from the FOMC statement.")
         return None
-
-    lower_raw = match.group(1)
-    upper_raw = match.group(2)
-
-    # --------------------------------------------------------
-    # Convert things such as:
-    #
-    # 3-3/4
-    #
-    # into:
-    #
-    # 3.75
-    # --------------------------------------------------------
-
-    def parse_rate(value: str) -> float:
-
-        value = value.strip()
-
-        if "-" in value:
-
-            parts = value.split("-")
-
-            if len(parts) == 2:
-
-                whole = float(parts[0])
-
-                fraction = parts[1]
-
-                if fraction == "1/4":
-                    return whole + 0.25
-
-                if fraction == "1/2":
-                    return whole + 0.50
-
-                if fraction == "3/4":
-                    return whole + 0.75
-
-        return float(value)
-
-    lower = parse_rate(lower_raw)
-    upper = parse_rate(upper_raw)
+    lower, upper = rates
 
     # --------------------------------------------------------
     # Extract release date from URL.

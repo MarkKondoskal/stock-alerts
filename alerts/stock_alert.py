@@ -1,3 +1,10 @@
+from datetime import datetime, timezone
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from watchlist_rules import validate_watchlist
+from alerts.alert_history import deliver
+
 import os
 import json
 import time
@@ -14,18 +21,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WATCHLIST_FILE = os.environ.get("STOCKALERTS_WATCHLIST_FILE") or os.path.join(BASE_DIR, "watchlist.json")
 
 
-def normalize_entry(entry):
-    # Backward compatibility with the old {"TICKER": [price targets]} format.
-    if isinstance(entry, list):
-        return {"price_targets": entry, "valuation_targets": {}}
-    if isinstance(entry, dict):
-        return {
-            "price_targets": entry.get("price_targets", entry.get("price", [])),
-            "valuation_targets": entry.get("valuation_targets", entry.get("valuation", {})),
-        }
-    return {"price_targets": [], "valuation_targets": {}}
-
-
 def load_watchlist():
     # A missing or invalid watchlist is a workflow failure, not an empty watchlist:
     # silently returning {} would mask configuration mistakes and lost alerts.
@@ -33,7 +28,7 @@ def load_watchlist():
         raw = json.load(f)
     if not isinstance(raw, dict):
         raise ValueError("watchlist.json must contain an object keyed by ticker")
-    return {str(symbol).strip().upper(): normalize_entry(entry) for symbol, entry in raw.items()}
+    return validate_watchlist(raw)
 
 
 def save_watchlist(watchlist):
@@ -130,11 +125,34 @@ def _metric_value(info, metric):
     keys = {"FxPE": "forwardPE", "PE": "trailingPE", "P/S": "priceToSalesTrailing12Months"}
     return _positive_number(info.get(keys[metric]))
 
+def session_prices(ticker, now=None):
+    """Only a complete exchange-local daily bar for today can trigger a price alert."""
+    now = now or datetime.now(timezone.utc)
+    history = ticker.history(period='5d', interval='1d', auto_adjust=False)
+    if history is None or history.empty:
+        raise ValueError('No dated price observations available')
+    stamp = history.index[-1]
+    if stamp.tzinfo is None:
+        raise ValueError('Quote has no exchange timezone')
+    if stamp.date() == now.astimezone(stamp.tzinfo).date():
+        row = history.iloc[-1]
+        current, low = _positive_number(row['Close']), _positive_number(row['Low'])
+        if current is not None and low is not None:
+            return current, low
+
+    regular = ticker.get_history_metadata().get('currentTradingPeriod', {}).get('regular', {})
+    start, end = _positive_number(regular.get('start')), _positive_number(regular.get('end'))
+    if start is not None and end is not None and start < end:
+        if not start <= now.timestamp() < end:
+            return None, None
+    raise ValueError('Current session quote is incomplete or regular hours are unavailable')
+
+
 def check_prices():
     watchlist = load_watchlist()
     if not watchlist:
-        print("No tickers found in watchlist.")
-        return False
+        print("No targets to check.")
+        return True
 
     # Check tickers with either price or valuation targets.
     symbols = [symbol for symbol, entry in watchlist.items()
@@ -163,18 +181,19 @@ def check_prices():
         delivered_prices = []  # price targets Discord has already accepted
         try:
             ticker = data.tickers[symbol]
-            fast = ticker.fast_info
-            current_price = _positive_number(getattr(fast, "last_price", None)) or _positive_number(getattr(fast, "lastPrice", None))
-            day_low = _positive_number(getattr(fast, "day_low", None)) or _positive_number(getattr(fast, "dayLow", None))
-            complete = complete and current_price is not None
+            current_price, day_low = session_prices(ticker)
+            if price_targets and current_price is None:
+                print(f"{symbol}: price check skipped outside regular hours; target kept for the next run.")
             check_price = day_low or current_price
             remaining_prices = []
             for target in price_targets:
                 if check_price is not None and check_price <= target:
-                    if send_discord_alert(symbol, float(current_price or check_price), float(check_price), float(target)):
+                    if deliver(lambda: send_discord_alert(symbol, float(current_price or check_price), float(check_price), float(target)),
+                               ticker=symbol, metric='PRICE', direction='buy', target=float(target), actual=float(check_price)):
                         changed = True
                         delivered_prices.append(target)
                     else:
+                        complete = False
                         remaining_prices.append(target)
                 else:
                     remaining_prices.append(target)
@@ -185,6 +204,7 @@ def check_prices():
                     info = ticker.get_info() or {}
                 except Exception as exc:
                     print(f"Could not fetch valuation data for {symbol}; keeping valuation targets: {exc}")
+                    complete = False
                     info = None
                 for metric, raw_targets in valuation_targets.items():
                     # Legacy lists mean trim thresholds.
@@ -198,9 +218,11 @@ def check_prices():
                         for target in targets.get(direction, []):
                             triggered = actual is not None and ((direction == "trim" and actual >= target) or (direction == "buy" and actual <= target))
                             if triggered:
-                                if send_valuation_alert(symbol, metric, direction, float(target), float(actual), current_price):
+                                if deliver(lambda: send_valuation_alert(symbol, metric, direction, float(target), float(actual), current_price),
+                                           ticker=symbol, metric=metric, direction=direction, target=float(target), actual=float(actual)):
                                     changed = True
                                 else:
+                                    complete = False
                                     keep[direction].append(target)
                             else:
                                 keep[direction].append(target)
