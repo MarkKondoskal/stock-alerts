@@ -62,7 +62,7 @@ function privateRenderRealized(realized){
     }
 }
 function privateRenderSnapshot(s){
-    privateSet('private-market-value',privateMoney(s.market_value));
+    privateSet('private-market-value',(s.market_value_partial?'Partial valuation: ':'')+privateMoney(s.market_value));
     privateSet('private-cost-basis',privateMoney(s.cost_basis));
     privateSet('private-unrealized',privateSignedMoney(s.unrealized_pl));
     privateColor(document.getElementById('private-unrealized'),s.unrealized_pl);
@@ -87,7 +87,7 @@ function privateRenderSnapshot(s){
     document.getElementById('private-holdings-rows').innerHTML=rows.join('')||'<tr><td colspan="11">No holdings in the selected view.</td></tr>';
     const missing=s.missing_tickers?.length?` Missing latest prices: ${s.missing_tickers.join(', ')}; the total excludes these positions.`:'';
     const costs=s.incomplete_cost_tickers?.length?` Missing cost basis: ${s.incomplete_cost_tickers.join(', ')}.`:'';
-    privateSet('private-valuation-note',`${s.valuation_basis}. ${s.cost_basis_note}${missing}${costs} No bank cash balances included.`);
+    privateSet('private-valuation-note',`${s.valuation_basis}. Market data through ${s.market_data_through||'unknown'}. ${s.stale_tickers?.length?'Stale quotes excluded: '+s.stale_tickers.join(', ')+'. ':''} ${s.cost_basis_note}${missing}${costs} No bank cash balances included.`);
     const active=(s.holdings||[]).filter(h=>h.market_value!==null);
     privateDoughnut('private-holdings-chart',active.map(h=>h.ticker),active.map(h=>h.market_value),active.map(h=>h.market_value));
     privateDoughnut('private-sector-chart',(s.sectors||[]).map(h=>h.sector),(s.sectors||[]).map(h=>h.market_value),(s.sectors||[]).map(h=>h.market_value));
@@ -141,9 +141,12 @@ async function privateLoadGainers(version){
     const requestId = ++privateGainersRequest;
     const period=privateHoldingsState.gainersPeriod;
     privateSet('private-gainers-note','Loading price returns…');
+    privateEmptyChart('private-drivers-chart');
+    privateSet('private-drivers-note','Loading portfolio contributions…');
     try{
         const data=await api('/api/private/holdings/analytics'+privateQuery(period));
         if(version!==privateHoldingsState.version||period!==privateHoldingsState.gainersPeriod||requestId!==privateGainersRequest)return;
+        PerformanceDrivers.render(data,{chartId:'private-drivers-chart',noteId:'private-drivers-note',draw:privateChart,clear:privateEmptyChart,period});
         const all=[...(data.gainers||[])].sort((a,b)=>b.return_pct-a.return_pct);
         if(!all.length){privateEmptyChart('private-gainers-chart');privateSet('private-gainers-note','No price history available for this period.');return;}
         const top=all.slice(0,5),bottom=all.slice(-5).filter(h=>!top.some(t=>t.ticker===h.ticker));
@@ -155,7 +158,8 @@ async function privateLoadGainers(version){
             scales:{x:{grid:{color:'#ffffff14'},ticks:{color:'#aaa',callback:x=>x+'%'}},y:{grid:{display:false},ticks:{color:'#aaa'}}}});
         privateSet('private-gainers-note',`Individual stock price returns (${period}); independent of the portfolio chart period.`);
     }catch(error){if(version!==privateHoldingsState.version||requestId!==privateGainersRequest)return;
-        privateEmptyChart('private-gainers-chart');privateSet('private-gainers-note','Gainers unavailable: '+error.message);}
+        privateEmptyChart('private-gainers-chart');privateSet('private-gainers-note','Gainers unavailable: '+error.message);
+        privateEmptyChart('private-drivers-chart');privateSet('private-drivers-note','Portfolio contributions unavailable. Refresh to retry.');}
 }
 window.loadPrivateHoldings=async function(){
     const version=++privateHoldingsState.version;

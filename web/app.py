@@ -6,6 +6,11 @@ Private portfolio/watchlist JSON files live in GITHUB_DATA_REPOSITORY.
 
 Never expose GitHub tokens or Discord webhooks in browser code.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from watchlist_rules import validate_watchlist
+
 import base64
 import hmac
 import json
@@ -235,66 +240,10 @@ def watchlist_put():
             "error": "Expected watchlist JSON object."
         }), 400
 
-    cleaned = {}
-
-    for raw_ticker, item in incoming.items():
-        ticker = str(raw_ticker).strip().upper()
-
-        if not ticker or not isinstance(item, dict):
-            return jsonify({
-                "error": "Each watchlist entry must be an object with a ticker."
-            }), 400
-
-        prices = item.get("price_targets", [])
-        vals = item.get("valuation_targets", {})
-
-        if not isinstance(prices, list) or not isinstance(vals, dict):
-            return jsonify({
-                "error": f"Invalid target format for {ticker}."
-            }), 400
-
-        try:
-            price_targets = [
-                float(value) for value in prices if str(value).strip()
-            ]
-
-            valuation_targets = {}
-
-            for metric, directions in vals.items():
-                if metric not in ("FxPE", "PE", "P/S"):
-                    continue
-                if not isinstance(directions, dict):
-                    raise ValueError(
-                        f"{ticker} {metric} targets must be an object."
-                    )
-
-                metric_targets = {}
-
-                for direction in ("trim", "buy"):
-                    values = directions.get(direction, [])
-
-                    if not isinstance(values, list):
-                        raise ValueError(
-                            f"{ticker} {metric} {direction} must be a list."
-                        )
-
-                    metric_targets[direction] = [
-                        float(value)
-                        for value in values
-                        if str(value).strip()
-                    ]
-
-                valuation_targets[metric] = metric_targets
-
-            cleaned[ticker] = {
-                "price_targets": price_targets,
-                "valuation_targets": valuation_targets,
-            }
-
-        except (ValueError, TypeError) as exc:
-            return jsonify({
-                "error": f"Invalid numeric target: {exc}"
-            }), 400
+    try:
+        cleaned = validate_watchlist(incoming)
+    except (ValueError, TypeError, OverflowError) as exc:
+        return jsonify({'error': str(exc)}), 400
 
     try:
         result = put_file(
@@ -464,6 +413,7 @@ def workflow_dispatch():
     workflow = str(body.get("workflow", "")).strip()
 
     allowed = {
+        "dashboard_snapshots.yml",
         "stock_checker.yml",
         "watchlist_manager.yml",
         "earnings_report.yml",
@@ -653,15 +603,103 @@ def public_watchlist_get():
         }), 502
 
 
+def _prepared_bundle():
+    from prepared import PATH, unpack
+    from public_cache import cached
+    cfg = config()
+    def read():
+        try:
+            bundle, _ = get_file(PATH, data=True)
+            return unpack(bundle)
+        except (requests.RequestException, ValueError, KeyError, TypeError, RuntimeError, OSError):
+            return {}
+    return cached(('prepared', cfg['data_repo'], cfg['data_branch'], cfg['token']), read)
+
+
+def _prepared_result(section, key, us, dk):
+    from prepared import select
+    result = select(_prepared_bundle(), section, key, us, dk)
+    if result is not None:
+        if section == 'analytics' and 'drivers' not in result:
+            from performance_drivers import drivers
+            parts = key.split(':')
+            result = {**result, **drivers(result.get('performance', []), parts[0], parts[1], parts[2] == '1', _private_csv)}
+        # Explicit public projections: the private bundle is never an API response.
+        allowed = ({'holdings', 'sectors', 'basis', 'missing_tickers', 'quote_dates',
+                    'market_data_through', 'stale_tickers', 'as_of', 'positions_as_of',
+                    'account', 'currency', 'include_etfs'} if section == 'public' else
+                   {'period', 'account', 'currency', 'include_etfs', 'performance', 'spy',
+                    'gainers', 'performance_note', 'available_from', 'performance_through',
+                    'missing_tickers', 'spy_selected_period', 'drivers', 'drivers_note', 'drivers_total_pp'} if section == 'analytics' else None)
+        if allowed:
+            result = {k: v for k, v in result.items() if k in allowed}
+    return result
+
+
+@app.get('/api/private/alert-history')
+def alert_history_get():
+    error = require_auth()
+    if error:
+        return error
+    try:
+        try:
+            events, _ = get_file('alerts/alert_history.json', data=True)
+        except requests.HTTPError as exc:
+            if exc.response is None or exc.response.status_code != 404:
+                raise
+            events = []
+        allowed = {'id', 'created_at', 'updated_at', 'ticker', 'metric', 'direction',
+                   'target', 'actual', 'status'}
+        response = jsonify({'events': [{k: v for k, v in event.items() if k in allowed}
+                                      for event in sorted(events, key=lambda x: x['created_at'], reverse=True)[:200]]})
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
+    except (requests.RequestException, ValueError, KeyError, TypeError, RuntimeError):
+        app.logger.exception('Private alert history unavailable')
+        return jsonify({'error': 'Could not load alert history.'}), 502
+
+
+@app.get('/api/public/watchlist-market')
+def watchlist_market_get():
+    from prepared import select
+    from watchlist_market import enrich
+    try:
+        targets, _ = get_file('alerts/watchlist.json', data=True)
+        targets = validate_watchlist(targets)
+        bundle = _prepared_bundle()
+        rows = {}
+        for ticker, entry in targets.items():
+            market = select(bundle, 'watchlist', ticker)
+            rows[ticker] = enrich(entry, market)
+        response = jsonify(rows)
+        response.headers['Cache-Control'] = 'public, max-age=30'
+        return response
+    except (requests.RequestException, ValueError, KeyError, TypeError, RuntimeError):
+        return jsonify({'error': 'Watchlist market data unavailable.'}), 502
+
+
 def _account_documents():
-    us, _ = get_file("portfolio/merrill_portfolio.json", data=True)
-    dk, _ = get_file("portfolio/nordnet_portfolio.json", data=True)
-    return us, dk
+    # Only public reads are cached; authenticated views read through after edits.
+    def build():
+        us, _ = get_file("portfolio/merrill_portfolio.json", data=True)
+        dk, _ = get_file("portfolio/nordnet_portfolio.json", data=True)
+        return us, dk
+    if request.path.startswith('/api/public/'):
+        from public_cache import cached
+        cfg = config()
+        return cached(('accounts', cfg['data_repo'], cfg['data_branch'], cfg['token']), build)
+    return build()
 
 
 def _private_csv(path):
     """Read an allowlisted CSV from the private repository, server-side only."""
     if path not in (
+        "portfolio/performance/attribution_us.csv",
+        "portfolio/performance/attribution_us_excluded.csv",
+        "portfolio/performance/attribution_dk.csv",
+        "portfolio/performance/attribution_dk_excluded.csv",
+        "portfolio/performance/attribution_combined.csv",
+        "portfolio/performance/attribution_combined_excluded.csv",
         "portfolio/performance/merrill_history_provisional.csv",
         "portfolio/performance/nordnet_all_available_provisional.csv",
         "portfolio/performance/combined_history_provisional.csv",
@@ -677,6 +715,10 @@ def _private_csv(path):
         response.raise_for_status()
         return base64.b64decode(response.json()["content"]).decode("utf-8")
 
+    if request.path.startswith('/api/public/'):
+        from public_cache import cached
+        cfg = config()
+        return cached(('history', path, cfg['data_repo'], cfg['data_branch'], cfg['token']), lambda: read_history(path, fetch))
     return read_history(path, fetch)
 
 
@@ -696,7 +738,9 @@ def public_analytics_get():
     try:
         from account_public import analytics
         us, dk = _account_documents()
-        response = jsonify(analytics(us, dk, account, period, _private_csv, currency=currency, include_etfs=include_etfs))
+        key = f'{account}:{currency}:{int(include_etfs)}:{period}'
+        result = _prepared_result('analytics', key, us, dk)
+        response = jsonify(result if result is not None else analytics(us, dk, account, period, _private_csv, currency=currency, include_etfs=include_etfs))
         response.headers["Cache-Control"] = "public, max-age=60"
         return response
     except (requests.RequestException, RuntimeError, ValueError, TypeError,
@@ -715,7 +759,9 @@ def public_analytics_snapshot_get():
     try:
         from account_public import snapshot
         us, dk = _account_documents()
-        response = jsonify(snapshot(us, dk, account, currency=currency, include_etfs=(etf_mode == "included")))
+        key = f'{account}:{currency}:{int(etf_mode == "included")}'
+        prepared_result = _prepared_result('public', key, us, dk)
+        response = jsonify(prepared_result if prepared_result is not None else snapshot(us, dk, account, currency=currency, include_etfs=(etf_mode == "included")))
         response.headers["Cache-Control"] = "public, max-age=60"
         return response
     except (requests.RequestException, RuntimeError, ValueError, TypeError,
@@ -776,7 +822,9 @@ def private_holdings_snapshot_get():
     try:
         from private_holdings import private_snapshot
         us, dk = _account_documents()
-        result = jsonify(private_snapshot(us, dk, account, currency, etfs == 'included'))
+        key = f'{account}:{currency}:{int(etfs == "included")}'
+        prepared_result = _prepared_result('private', key, us, dk)
+        result = jsonify(prepared_result if prepared_result is not None else private_snapshot(us, dk, account, currency, etfs == 'included'))
         result.headers['Cache-Control'] = 'private, no-store'
         return result
     except Exception:
@@ -800,7 +848,9 @@ def private_holdings_analytics_get():
     try:
         from account_public import analytics
         us, dk = _account_documents()
-        result = jsonify(analytics(us, dk, account, period, _private_csv,
+        key = f'{account}:{currency}:{int(etfs == "included")}:{period}'
+        prepared_result = _prepared_result('analytics', key, us, dk)
+        result = jsonify(prepared_result if prepared_result is not None else analytics(us, dk, account, period, _private_csv,
                                    currency=currency, include_etfs=(etfs == 'included')))
         result.headers['Cache-Control'] = 'private, no-store'
         return result
@@ -1053,6 +1103,84 @@ def public_sentiment_get():
     except Exception:
         app.logger.exception("Market sentiment temporarily unavailable")
         return jsonify({"error": "Market sentiment sources temporarily unavailable."}), 502
+
+
+def _research_document():
+    from research_library import PATH, initial
+    try:
+        return get_file(PATH, data=True)
+    except requests.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 404:
+            return initial(), 'new'
+        raise
+
+
+@app.get('/api/public/research')
+def research_public_get():
+    from research_library import public
+    try:
+        document, _ = _research_document()
+        response = jsonify(public(document))
+        response.headers['Cache-Control'] = 'public, max-age=30'
+        return response
+    except (requests.RequestException, ValueError, KeyError, TypeError, RuntimeError):
+        return jsonify({'error': 'Research is temporarily unavailable.'}), 502
+
+
+@app.get('/api/private/research')
+def research_private_get():
+    error = require_auth()
+    if error:
+        return error
+    try:
+        document, sha = _research_document()
+        response = jsonify(document)
+        response.set_etag(sha)
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
+    except (requests.RequestException, ValueError, KeyError, TypeError, RuntimeError):
+        return jsonify({'error': 'Could not load the research library.'}), 502
+
+
+@app.put('/api/private/research')
+def research_private_put():
+    error = require_auth()
+    if error:
+        return error
+    from research_library import PATH, validate
+    revisions = request.if_match.as_set()
+    sha = next(iter(revisions), '')
+    if len(revisions) != 1 or not (sha == 'new' or (len(sha) == 40 and all(c in '0123456789abcdef' for c in sha))):
+        return jsonify({'error': 'Reload Research before saving.'}), 428
+    try:
+        document = validate(request.get_json(silent=True))
+    except (ValueError, TypeError) as exc:
+        return jsonify({'error': str(exc)}), 400
+    try:
+        _, branch = repository_and_branch(data=True)
+        payload = {'message': 'Update research library', 'branch': branch,
+                   'content': base64.b64encode((json.dumps(document, indent=2, ensure_ascii=False)+'\n').encode()).decode()}
+        if sha != 'new':
+            payload['sha'] = sha
+        result = requests.put(repo_url(PATH, data=True), headers=gh_headers(), json=payload, timeout=20)
+        if result.status_code in (409, 422):
+            return jsonify({'error': 'Research changed elsewhere. Reload Research before retrying.'}), 409
+        result.raise_for_status()
+        response = jsonify(document)
+        response.set_etag(result.json()['content']['sha'])
+        response.headers['Cache-Control'] = 'private, no-store'
+        return response
+    except (requests.RequestException, ValueError, KeyError, TypeError, RuntimeError):
+        return jsonify({'error': 'Could not confirm the save. Reload Research before retrying.'}), 502
+
+
+@app.after_request
+def invalidate_public_reads(response):
+    if request.method in ('POST', 'PUT', 'PATCH', 'DELETE') and response.status_code < 300:
+        from public_cache import clear
+        clear()
+    return response
+
 
 if __name__ == "__main__":
     # Local development only. Use Gunicorn for deployment.

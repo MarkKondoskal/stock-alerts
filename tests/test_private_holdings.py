@@ -13,7 +13,7 @@ from private_holdings import private_snapshot
 import account_public
 
 FIX = Path(os.getenv('STOCKALERTS_TEST_ACCOUNT_DIR',
-                     ROOT.parent / 'stock-alerts-private-data-main' / 'portfolio'))
+                     ROOT / 'tests' / 'fixtures'))
 
 
 def sample_accounts():
@@ -28,7 +28,7 @@ class PrivateHoldingsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if not (FIX / 'merrill_portfolio.json').is_file() or not (FIX / 'nordnet_portfolio.json').is_file():
-            raise unittest.SkipTest('Set STOCKALERTS_TEST_ACCOUNT_DIR to the private portfolio directory')
+            raise RuntimeError('Required account test fixtures are missing')
         cls.us, cls.dk = sample_accounts()
 
     @staticmethod
@@ -100,7 +100,8 @@ class PrivateHoldingsTest(unittest.TestCase):
         client = app.test_client()
         for route in ['/api/private/holdings/snapshot', '/api/private/holdings/analytics']:
             self.assertEqual(client.get(route).status_code,401)
-        with patch('app._account_documents', return_value=(self.us,self.dk)), \
+        with patch('app._prepared_bundle', return_value={}), \
+             patch('app._account_documents', return_value=(self.us,self.dk)), \
              patch('private_holdings._quote_prices',side_effect=self.quotes), \
              patch('account_public._quote_prices',side_effect=self.quotes):
             response = client.get('/api/private/holdings/snapshot',headers={'Authorization':'Bearer demo-test-password'})

@@ -96,7 +96,9 @@ jobs:
 
       - name: Commit & push changes
         if: github.event.inputs.action != 'LIST' && github.event.inputs.action != 'STATUS'
-        working-directory: _private
         env:
-          STOCKALERTS_PUSH_BRANCH: ${{ vars.STOCKALERTS_DATA_BRANCH || 'main' }}
-        run: bash "$GITHUB_WORKSPACE/.github/scripts/commit_and_push.sh" "Update private watchlist" alerts/watchlist.json
+          STOCKALERTS_PRIVATE_CHECKOUT: _private
+          STOCKALERTS_DATA_REPOSITORY: ${{ vars.STOCKALERTS_DATA_REPOSITORY }}
+          STOCKALERTS_DATA_BRANCH: ${{ vars.STOCKALERTS_DATA_BRANCH || 'main' }}
+          STOCKALERTS_DATA_TOKEN: ${{ secrets.STOCKALERTS_DATA_TOKEN }}
+        run: python alerts/publish_watchlist.py

@@ -1,747 +1,1509 @@
 
+
 "use strict";
 
+
+
 const API = {
+
     portfolio: "/api/public/portfolio",
-    watchlist: "/api/public/watchlist",
+
+    watchlist: "/api/public/watchlist-market",
+
 };
+
+
 
 const elements = {
+
     holdingsTab: document.getElementById("holdingsTab"),
+
     watchlistTab: document.getElementById("watchlistTab"),
+
+    researchTab: document.getElementById("researchTab"),
+    researchPanel: document.getElementById("researchPanel"),
     sentimentTab: document.getElementById("sentimentTab"),
+
     holdingsPanel: document.getElementById("holdingsPanel"),
+
     watchlistPanel: document.getElementById("watchlistPanel"),
+
     tradeActivityTab: document.getElementById("tradeActivityTab"),
+
     tradeActivityPanel: document.getElementById("tradeActivityPanel"),
+
     sentimentPanel: document.getElementById("sentimentPanel"),
 
+
+
     holdingsBody: document.getElementById("holdingsBody"),
+
     watchlistBody: document.getElementById("watchlistBody"),
+
     watchlistCount: document.getElementById("watchlistCount"),
 
+
+
     refreshButton: document.getElementById("refreshPublic"),
+
     message: document.getElementById("publicMessage"),
+
 };
 
+
+
 let cachedPortfolio = null;
+
 let cachedWatchlist = null;
 
 
+
+
+
 /* -------------------------
+
    General helpers
+
 ------------------------- */
+
+
 
 function escapeHtml(value) {
+
     return String(value ?? "").replace(/[&<>"']/g, (character) => {
+
         const entities = {
+
             "&": "&amp;",
+
             "<": "&lt;",
+
             ">": "&gt;",
+
             '"': "&quot;",
+
             "'": "&#039;",
+
         };
 
+
+
         return entities[character];
+
     });
+
 }
+
+
 
 function asArray(payload, possibleKeys = []) {
+
     if (Array.isArray(payload)) {
+
         return payload;
+
     }
+
+
 
     if (!payload || typeof payload !== "object") {
+
         return [];
+
     }
+
+
 
     for (const key of possibleKeys) {
+
         if (Array.isArray(payload[key])) {
+
             return payload[key];
+
         }
+
     }
+
+
 
     return [];
+
 }
+
+
 
 function formatNumber(value, decimals = 2) {
+
     const number = Number(value);
 
+
+
     if (!Number.isFinite(number)) {
+
         return "—";
+
     }
+
+
 
     return number.toLocaleString("en-US", {
+
         minimumFractionDigits: decimals,
+
         maximumFractionDigits: decimals,
+
     });
+
 }
+
+
 
 function formatPrice(value, currency = "USD") {
+
     if (value === null || value === undefined || value === "") return "—";
+
     const number = Number(value);
 
+
+
     if (!Number.isFinite(number)) {
+
         return "—";
+
     }
+
+
 
     return currency === "DKK" ? `${formatNumber(number, 2)} kr` : "$" + formatNumber(number, 2);
+
 }
+
+
 
 function showMessage(message, isError = false) {
+
     elements.message.textContent = message;
+
     elements.message.hidden = !message;
+
     elements.message.classList.toggle("error", isError);
+
 }
+
+
 
 function setLoading(isLoading) {
+
     elements.refreshButton.disabled = isLoading;
+
     elements.refreshButton.textContent = isLoading
+
         ? "Refreshing…"
+
         : "Refresh data";
+
 }
+
+
 
 async function fetchJson(url) {
+
     const response = await fetch(url, {
+
         method: "GET",
+
         headers: {
+
             Accept: "application/json",
+
         },
+
         cache: "no-store",
+
     });
 
+
+
     if (!response.ok) {
+
         throw new Error(`Request failed (${response.status}): ${url}`);
+
     }
 
+
+
     return response.json();
+
 }
+
+
+
 
 
 /* -------------------------
+
    Tab navigation
+
 ------------------------- */
 
+
+
 function activateTab(tabName, moveFocus = false) {
+
     const tabs = [
+
         ["holdings", elements.holdingsTab, elements.holdingsPanel],
+
         ["watchlist", elements.watchlistTab, elements.watchlistPanel],
+
         ["activity", elements.tradeActivityTab, elements.tradeActivityPanel],
+
         ["sentiment", elements.sentimentTab, elements.sentimentPanel],
+        ["research", elements.researchTab, elements.researchPanel],
+
     ];
+
     for (const [name, button, panel] of tabs) {
+
         const active = name === tabName;
+
         button.setAttribute("aria-selected", String(active));
+
         button.tabIndex = active ? 0 : -1;
+
         panel.hidden = !active;
+
         if (active && moveFocus) button.focus();
+
     }
+
     const controls = document.querySelector('.account-switcher');
-    if (controls) controls.hidden = tabName === 'watchlist' || tabName === 'sentiment';
+
+    if (controls) controls.hidden = tabName === 'watchlist' || tabName === 'sentiment' || tabName === 'research';
+
     document.querySelectorAll('[data-holdings-control]').forEach(item => {
+
         item.hidden = tabName === 'activity';
+
     });
+
     for (const id of ['accountStatus', 'publicDataFreshness']) {
+
         const item = document.getElementById(id);
+
         if (item) item.hidden = tabName !== 'holdings';
+
     }
+
+    if (tabName === 'research') window.Research.load('public');
     if (tabName === 'sentiment') window.StockSentiment?.load('public');
+
     if (tabName === 'activity') window.loadPublicTradeActivity(selectedAccount);
+
 }
 
-const publicTabNames = ['holdings', 'activity', 'watchlist', 'sentiment'];
-const publicTabButtons = [elements.holdingsTab, elements.tradeActivityTab, elements.watchlistTab, elements.sentimentTab];
+
+
+const publicTabNames = ['holdings', 'activity', 'watchlist', 'sentiment', 'research'];
+
+const publicTabButtons = [elements.holdingsTab, elements.tradeActivityTab, elements.watchlistTab, elements.sentimentTab, elements.researchTab];
+
 publicTabButtons.forEach((button, index) => {
+
     button.addEventListener('click', () => activateTab(publicTabNames[index]));
+
     button.addEventListener('keydown', event => {
+
         let next = index;
+
         if (event.key === 'ArrowRight') next = (index + 1) % publicTabNames.length;
+
         else if (event.key === 'ArrowLeft') next = (index + publicTabNames.length - 1) % publicTabNames.length;
+
         else if (event.key === 'Home') next = 0;
+
         else if (event.key === 'End') next = publicTabNames.length - 1;
+
         else return;
+
         event.preventDefault();
+
         activateTab(publicTabNames[next], true);
+
     });
+
 });
 
 
+
+
+
 /* -------------------------
+
    Holdings tab
+
 ------------------------- */
+
+
 
 function renderHoldings(payload) {
+
     const holdings = asArray(payload, ["holdings", "portfolio", "positions", "data"]);
+
     const meta = payload && !Array.isArray(payload) ? payload : {};
+
     elements.holdingsBody.innerHTML = holdings.length ? [...holdings]
+
         .sort((a,b) => (b.allocation_pct || 0) - (a.allocation_pct || 0))
+
         .map(h => holdingRow(h)).join("")
-        : `<tr><td colspan="3" class="public-empty">No holdings available.</td></tr>`;
+
+        : `<tr><td colspan="6" class="public-empty">No holdings available.</td></tr>`;
+
 }
+
+
 
 function holdingRow(h) {
+
     const allocation = h.allocation_pct == null ? null : Number(h.allocation_pct);
+
     return `<tr>
+
         <td class="public-ticker">${escapeHtml(h.ticker || "—")}</td>
+
         <td>${escapeHtml(h.sector || "—")}</td>
+
         <td><div class="public-allocation"><span class="public-number">${allocation === null ? "—" : `${formatNumber(allocation)}%`}</span>
+
             <div class="public-allocation-track"><div class="public-allocation-fill" style="width:${Math.max(0, Math.min(100,allocation || 0))}%"></div></div></div></td>
+
     </tr>`;
+
 }
 
+
+
 /* -------------------------
+
    Watchlist target helpers
+
 ------------------------- */
+
+
 
 function formatTargetValue(value) {
+
     if (value === null || value === undefined || value === "") {
+
         return "—";
+
     }
+
+
 
     if (typeof value === "number" || (
+
         typeof value === "string" && value.trim() !== ""
+
         && Number.isFinite(Number(value))
+
     )) {
+
         return formatNumber(Number(value), 2);
+
     }
+
+
 
     if (typeof value === "object") {
+
         const parts = [];
 
+
+
         if (value.direction) {
+
             parts.push(String(value.direction));
+
         }
+
+
 
         if (value.type) {
+
             parts.push(String(value.type));
+
         }
+
+
 
         if (value.multiple !== undefined) {
+
             parts.push(`${value.multiple}x`);
+
         } else if (value.value !== undefined) {
+
             parts.push(String(value.value));
+
         }
+
+
 
         if (value.metric) {
+
             parts.push(String(value.metric));
+
         }
+
+
 
         return parts.join(" ") || "Target";
+
     }
+
+
 
     return String(value);
+
 }
+
+
 
 function renderPriceTargets(targets) {
+
     if (!Array.isArray(targets)) {
+
         if (targets && typeof targets === "object") {
+
             targets = Object.entries(targets).map(([key, value]) => ({
+
                 label: key,
+
                 value,
+
             }));
+
         } else if (targets !== null && targets !== undefined) {
+
             targets = [targets];
+
         } else {
+
             targets = [];
+
         }
+
     }
+
+
 
     const formatted = targets.map((target) => {
+
         if (typeof target === "number" || typeof target === "string") {
+
             return {
+
                 label: "",
+
                 value: formatTargetValue(target),
+
             };
+
         }
+
+
 
         return {
+
             label: target.label || target.type || target.direction || "",
+
             value: formatTargetValue(target),
+
         };
+
     });
 
+
+
     return renderTargetChips(formatted);
+
 }
+
+
 
 function renderValuationTargets(targets) {
+
     if (!targets || typeof targets !== "object") return renderTargetChips([]);
+
     const chips = [];
+
     for (const [metric, targetsByDirection] of Object.entries(targets)) {
+
         if (targetsByDirection && typeof targetsByDirection === "object" && !Array.isArray(targetsByDirection)) {
+
             for (const direction of ["buy", "trim"]) {
+
                 for (const value of (Array.isArray(targetsByDirection[direction]) ? targetsByDirection[direction] : [])) {
+
                     chips.push({ label: `${metric} ${direction}`, value: `${formatTargetValue(value)}x` });
+
                 }
+
             }
+
         } else {
+
             for (const value of (Array.isArray(targetsByDirection) ? targetsByDirection : [])) {
+
                 chips.push({ label: metric, value: `${formatTargetValue(value)}x` });
+
             }
+
         }
+
     }
+
     return renderTargetChips(chips);
+
 }
+
+
 
 function renderTargetChips(targets) {
+
     if (!targets.length) {
+
         return '<span class="public-muted">—</span>';
+
     }
+
+
 
     return `
+
         <div class="public-target-list">
+
             ${targets.map((target) => {
+
                 const label = target.label
+
                     ? `<strong>${escapeHtml(target.label)}:</strong> `
+
                     : "";
 
+
+
                 return `
+
                     <span class="public-target">
+
                         ${label}${escapeHtml(target.value)}
+
                     </span>
+
                 `;
+
             }).join("")}
+
         </div>
+
     `;
+
 }
 
 
+
+
+
 /* -------------------------
+
    Watchlist tab
+
 ------------------------- */
+
+
 
 function renderWatchlist(payload) {
+
     const watchlist = asArray(payload, [
+
         "watchlist", "items", "data",
+
     ]);
+
     // Public endpoint returns an object keyed by ticker, not an array.
+
     if (!watchlist.length && payload && typeof payload === "object" && !Array.isArray(payload)) {
+
         for (const [ticker, entry] of Object.entries(payload)) {
+
             if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+
                 watchlist.push({ticker, ...entry});
+
             }
+
         }
+
     }
+
+
 
     elements.watchlistCount.textContent =
+
         `${watchlist.length} ${watchlist.length === 1 ? "ticker" : "tickers"}`;
 
+
+
     if (!watchlist.length) {
+
         elements.watchlistBody.innerHTML = `
+
             <tr>
-                <td colspan="3" class="public-empty">
+
+                <td colspan="6" class="public-empty">
+
                     No watchlist entries available.
+
                 </td>
+
             </tr>
+
         `;
+
         return;
+
     }
 
+
+
     const sortedWatchlist = [...watchlist].sort((a, b) =>
-        String(a.ticker || "").localeCompare(String(b.ticker || ""))
+
+        (document.getElementById('watchlist-sort-public').value === 'nearest'
+            ? WatchlistUI.nearest(a,a.market) - WatchlistUI.nearest(b,b.market) : 0)
+        || String(a.ticker || "").localeCompare(String(b.ticker || ""))
+
     );
 
+
+
     elements.watchlistBody.innerHTML = sortedWatchlist.map((item) => {
+
         const ticker = escapeHtml(item.ticker || "—");
 
+
+
         const priceTargets = renderPriceTargets(
+
             item.price_targets ?? item.targets
+
         );
+
+
 
         const valuationTargets = renderValuationTargets(
+
             item.valuation_targets
+
         );
 
+
+
         return `
+
             <tr>
+
                 <td>
+
                     <span class="public-ticker">${ticker}</span>
+
                 </td>
 
-                <td>${priceTargets}</td>
+
+
+                <td>${WatchlistUI.price(item.market)}</td><td>${WatchlistUI.valuations(item.market)}</td><td>${WatchlistUI.proximity(item,item.market)}</td><td>${priceTargets}</td>
+
+
 
                 <td>${valuationTargets}</td>
+
             </tr>
+
         `;
+
     }).join("");
+
 }
+
+
+
 
 
 /* -------------------------
+
    Data loading
+
 ------------------------- */
 
+
+
 async function loadDashboard() {
+
     setLoading(true);
+
     showMessage("");
 
+
+
     const [watchlistResult] = await Promise.allSettled([fetchJson(API.watchlist)]);
+
     const errors = [];
 
+
+
     if (watchlistResult.status === "fulfilled") {
+
         cachedWatchlist = watchlistResult.value;
+
         renderWatchlist(cachedWatchlist);
+
     } else {
+
         console.error("Could not load public watchlist:", watchlistResult.reason);
 
+
+
         elements.watchlistBody.innerHTML = `
+
             <tr>
-                <td colspan="3" class="public-empty">
+
+                <td colspan="6" class="public-empty">
+
                     Could not load watchlist. Please try refreshing.
+
                 </td>
+
             </tr>
+
         `;
 
+
+
         elements.watchlistCount.textContent = "Unavailable";
+
         errors.push("watchlist");
+
     }
+
+
 
     if (errors.length) {
+
         showMessage(
+
             `Some data could not be loaded: ${errors.join(" and ")}. Please refresh to try again.`,
+
             true
+
         );
+
     } else {
+
         showMessage("");
+
     }
 
+
+
     setLoading(false);
+
 }
+
+
 
 elements.refreshButton.addEventListener("click", loadDashboard);
 
 
+
+
+
 /* -------------------------
+
    Start dashboard
+
 ------------------------- */
 
+
+
 activateTab("holdings");
+
 loadDashboard();
 
 
 
+
+
+
+
 /* -------------------------
+
    Analytics, read-only endpoints
+
 ------------------------- */
+
 const PERFORMANCE_PERIODS = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y", "3Y", "ALL"];
+
 const GAINER_PERIODS = ["1D", "1W", "1M", "3M", "6M", "YTD", "1Y"];
+
 const analyticsCharts = {};
+
 const analyticsRequests = new Map();
+
 let selectedAccount = "combined";
+
 let selectedCurrency = "USD";
+
 let includeEtfs = false; // Default: show stocks only
+
 const ACCOUNT_LABELS = { combined: "Combined", us: "US · Merrill", dk: "DK · Nordnet" };
+
 function setAccountStatus(message) {
+
     const status = document.getElementById("accountStatus");
+
     if (status) status.textContent = message;
+
 }
+
 let accountGeneration = 0;
+
 let performancePeriod = "YTD";
+
 let gainerPeriod = "1M";
+
 const SNAPSHOT_API = "/api/public/analytics/snapshot"; // Not a selectable period.
 
+
+
 const colors = ["#60a5fa", "#34d399", "#fbbf24", "#f472b6", "#a78bfa", "#fb923c",
+
     "#2dd4bf", "#818cf8", "#f87171", "#bef264", "#38bdf8", "#e879f9"];
 
+
+
 function selector(id, periods, selected, callback) {
+
     const container = document.getElementById(id);
+
     container.replaceChildren();
+
     periods.forEach(period => {
+
         const button = document.createElement("button");
+
         button.type = "button";
+
         button.className = `analytics-period ${period === selected ? "active" : ""}`;
+
         button.textContent = period === "ALL" ? "All" : period;
+
         button.setAttribute("aria-pressed", String(period === selected));
+
         button.addEventListener("click", () => callback(period));
+
         container.appendChild(button);
+
     });
+
 }
+
+
 
 async function analyticsFor(period, account) {
+
     const key = `${account}:${period}:${selectedCurrency}:${includeEtfs}`;
+
     if (!analyticsRequests.has(key)) {
+
         const promise = fetchJson(`/api/public/analytics?account=${encodeURIComponent(account)}&period=${encodeURIComponent(period)}&currency=${selectedCurrency}&etfs=${includeEtfs ? "included" : "excluded"}`)
+
             .catch(error => { analyticsRequests.delete(key); throw error; });
+
         analyticsRequests.set(key, promise);
+
     }
+
     return analyticsRequests.get(key);
+
 }
+
+
 
 function createChart(id, type, data, options = {}) {
+
     if (!window.Chart) {
+
         throw new Error("Chart.js could not be loaded. Check your connection to the chart library.");
+
     }
+
     if (analyticsCharts[id]) analyticsCharts[id].destroy();
+
     const element = document.getElementById(id);
+
     analyticsCharts[id] = new Chart(element, {
+
         type, data,
+
         options: {
+
             responsive: true, maintainAspectRatio: false,
+
             color: "#aaa",
+
             animation: { duration: 200 },
+
             plugins: { legend: { labels: { color: "#bbb", boxWidth: 12 } } },
+
             ...options,
+
         },
+
     });
+
 }
+
+
 
 function performancePct(value) {
+
     if (value === null || !Number.isFinite(Number(value))) return "—";
+
     const n = Number(value);
+
     return `${n > 0 ? "+" : ""}${n.toFixed(2)}%`;
+
 }
+
+
 
 function applyPerformanceColor(element, value) {
+
     element.classList.toggle("positive", Number(value) > 0);
+
     element.classList.toggle("negative", Number(value) < 0);
+
 }
+
+
 
 async function updatePerformance() {
+
     const period = performancePeriod;
+
     const account = selectedAccount;
+
     const generation = accountGeneration;
+
     const currencyAtRequest = selectedCurrency;
+
     const note = document.getElementById("performanceNote");
+
     document.getElementById("performancePeriodLabel").textContent = period === "ALL" ? "All" : period;
+
     note.textContent = "Loading market history…";
+
     try {
+
         const info = await analyticsFor(period, account);
+
         if (period !== performancePeriod || generation !== accountGeneration || currencyAtRequest !== selectedCurrency) return;
+
         const spy = new Map((info.spy || []).map(p => [p.date, p.value]));
+
         const aligned = (info.performance || []).filter(p => spy.has(p.date));
+
         const fullPeriodElement = document.getElementById("spyFullPeriod");
+
         const selectedSpy = info.spy_selected_period;
+
         fullPeriodElement.hidden = true;
+
         if (selectedSpy && Number.isFinite(Number(selectedSpy.return_pct))) {
+
             fullPeriodElement.textContent = `SPY full ${period === "ALL" ? "available" : period} period: ${performancePct(selectedSpy.return_pct)} (${selectedSpy.from} to ${selectedSpy.to})`;
+
             fullPeriodElement.hidden = false;
+
         }
+
         if (aligned.length < 2) {
+
             const freshness = document.getElementById('publicDataFreshness');
-            if (freshness) freshness.textContent = `Holdings snapshots: ${freshness.dataset.positionsDate || 'not available'} · Performance history unavailable for this selection.`;
+
+            if (freshness) freshness.textContent = `Holdings snapshots: ${freshness.dataset.positionsDate || 'not available'} · Market prices through: ${freshness.dataset.marketDataThrough || 'loading…'} · Performance history unavailable for this selection.`;
+
             if (analyticsCharts.performanceChart) analyticsCharts.performanceChart.destroy();
+
             delete analyticsCharts.performanceChart;
+
             for (const id of ["performanceReturn", "performanceDifference", "performancePortfolioPill", "performanceSpyPill"]) {
+
                 document.getElementById(id).textContent = "—";
+
             }
+
             document.getElementById("performanceBaseline").textContent = "Insufficient portfolio history";
+
             note.textContent = "Not enough verified portfolio history for this period. " + info.performance_note;
+
             return;
+
         }
+
         const pLast = Number(aligned[aligned.length - 1].value);
+
         const sLast = Number(spy.get(aligned[aligned.length - 1].date));
+
         const comparisonStart = String(aligned[0].date).slice(0,10);
+
         const comparisonEnd = String(aligned[aligned.length - 1].date).slice(0,10);
+
         const dataFreshness = document.getElementById('publicDataFreshness');
+
         if (dataFreshness) {
+
             dataFreshness.dataset.performanceDate = comparisonEnd;
+
             const positionsDate = dataFreshness.dataset.positionsDate || 'not available';
+
             const pending = positionsDate.split(' / ').some(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && d > comparisonEnd);
-            dataFreshness.textContent = `Holdings snapshots: ${positionsDate} · Performance through: ${comparisonEnd}.` + (pending ? ' Historical return update pending.' : ' Returns refresh after private recalculation.');
+
+            dataFreshness.textContent = `Holdings snapshots: ${positionsDate} · Market prices through: ${dataFreshness.dataset.marketDataThrough || 'loading…'} · Performance through: ${comparisonEnd}.` + (pending ? ' Historical return update pending.' : ' Returns refresh after private recalculation.');
+
         }
+
         const primary = document.getElementById("performanceReturn");
+
         primary.textContent = performancePct(pLast);
+
         applyPerformanceColor(primary, pLast);
+
         document.getElementById("performanceBaseline").textContent = `Both lines rebased to 0% on ${comparisonStart}`;
+
         document.getElementById("performanceDifference").textContent = `${pLast - sLast >= 0 ? "+" : ""}${(pLast - sLast).toFixed(2)} pp`;
+
         document.getElementById("performancePortfolioPill").textContent = performancePct(pLast);
+
         document.getElementById("performanceSpyPill").textContent = performancePct(sLast);
+
         applyPerformanceColor(document.getElementById("performancePortfolioPill"), pLast);
+
         applyPerformanceColor(document.getElementById("performanceSpyPill"), sLast);
+
         const chartCtx = document.getElementById("performanceChart").getContext("2d");
+
         const gradient = chartCtx.createLinearGradient(0,0,0,340);
+
         gradient.addColorStop(0, "rgba(45,212,191,.20)");
+
         gradient.addColorStop(1, "rgba(45,212,191,0)");
+
         createChart("performanceChart", "line", {
+
             labels: aligned.map(p => p.date),
+
             datasets: [
+
                 { label: "Portfolio", data: aligned.map(p => p.value), borderColor: "#2dd4bf",
+
                   backgroundColor: gradient, fill: true, borderWidth: 3, pointRadius: 0, pointHitRadius: 12, tension: .18 },
+
                 { label: "SPY · matched dates", data: aligned.map(p => spy.get(p.date)), borderColor: "#bb92ef",
+
                   backgroundColor: "#bb92ef", borderWidth: 2.5, pointRadius: 0, pointHitRadius: 12, tension: .18 },
+
             ],
+
         }, { interaction: { intersect: false, mode: "index" },
+
              scales: { x: { ticks: { maxTicksLimit: 6, color: "#aaa", maxRotation: 0 }, grid: { display: false }, border: { display: false } },
+
                        y: { position: "right", ticks: { color: "#aaa", callback: v => `${v}%` }, grid: { color: "rgba(255,255,255,.10)" }, border: { display: false } } },
+
              plugins: { legend: { display: false },
+
                         tooltip: { backgroundColor: "#2d2d2d", callbacks: {
+
                             title: items => String(items[0]?.label || "").slice(0,16),
+
                             label: c => `${c.dataset.label}: ${performancePct(c.parsed.y)}` } } } });
+
         note.textContent = `Matched comparison: ${comparisonStart} to ${comparisonEnd}. ${info.performance_note}`;
+
     } catch (error) {
+
         if (period !== performancePeriod || generation !== accountGeneration || currencyAtRequest !== selectedCurrency) return;
+
         note.textContent = `Performance unavailable: ${error.message}`;
+
     }
+
 }
+
+
 
 function doughnut(id, names, values) {
+
     if (!names.length) return;
+
     createChart(id, "doughnut", {
+
         labels: names,
+
         datasets: [{ data: values, backgroundColor: names.map((_, i) => colors[i % colors.length]),
+
                      borderColor: "#111", borderWidth: 2 }],
+
     }, { cutout: "65%", plugins: { legend: { position: "right", labels: { color: "#bbb", boxWidth: 10,
+
                    font: { size: 11 } } }, tooltip: { callbacks: { label: c => `${c.label}: ${c.parsed.toFixed(2)}%` } } } });
+
 }
+
+
 
 function updateAllocation(info) {
+
     if (Array.isArray(info.holdings)) {
+
         renderHoldings({ positions: info.holdings, position_count: info.holdings.length,
+
                          allocation_basis: "Market value" });
+
         if (window.Chart) {
+
             doughnut("holdingsChart", info.holdings.map(h => h.ticker), info.holdings.map(h => h.allocation_pct));
+
             doughnut("sectorChart", info.sectors.map(h => h.sector), info.sectors.map(h => h.allocation_pct));
+
         }
+
     }
+
 }
+
+
 
 async function updateGainers() {
+
     const period = gainerPeriod;
+    const clearDriver = id => {if(analyticsCharts[id]){analyticsCharts[id].destroy();delete analyticsCharts[id];}};
+    clearDriver('driversChart');
+    document.getElementById('driversNote').textContent='Loading portfolio contributions…';
+
     const account = selectedAccount;
+
     const generation = accountGeneration;
+
     const currencyAtRequest = selectedCurrency;
+
     const note = document.getElementById("gainerNote");
+
     note.textContent = "Loading stock returns…";
+
     try {
+
         const info = await analyticsFor(period, account);
+
         if (period !== gainerPeriod || generation !== accountGeneration || currencyAtRequest !== selectedCurrency) return;
+
+        PerformanceDrivers.render(info,{chartId:'driversChart',noteId:'driversNote',draw:createChart,clear:clearDriver,period});
         const sorted = [...info.gainers].sort((a, b) => b.return_pct - a.return_pct);
+
         if (!sorted.length) { note.textContent = "No price history available for the selected period."; return; }
+
         const shown = [...sorted.slice(0, 5), ...sorted.slice(-5).filter(x => !sorted.slice(0, 5).some(y => y.ticker === x.ticker))];
+
         createChart("gainersChart", "bar", {
+
             labels: shown.map(h => h.ticker),
+
             datasets: [{ label: "Price return", data: shown.map(h => h.return_pct),
+
                          backgroundColor: shown.map(h => h.return_pct >= 0 ? "#4ade80" : "#fb7185"),
+
                          borderRadius: 4 }],
+
         }, { indexAxis: "y", plugins: { legend: { display: false },
+
               tooltip: { callbacks: { label: c => `${c.parsed.x.toFixed(2)}%` } } },
+
               scales: { x: { ticks: { color: "#888", callback: v => `${v}%` }, grid: { color: "#282828" } },
+
                         y: { ticks: { color: "#bbb" }, grid: { display: false } } } });
+
         note.textContent = `Top and bottom performers by share-price return (${period}). ${info.missing_tickers?.length ? "Missing prices: " + info.missing_tickers.join(", ") + "." : ""}`;
+
     } catch (error) {
-        if (generation !== accountGeneration || currencyAtRequest !== selectedCurrency) return;
+
+        if (period !== gainerPeriod || generation !== accountGeneration || currencyAtRequest !== selectedCurrency) return;
+
         note.textContent = `Gainers/losers unavailable: ${error.message}`;
+        clearDriver('driversChart');document.getElementById('driversNote').textContent='Portfolio contributions unavailable. Refresh to retry.';
+
     }
+
 }
+
+
 
 let snapshotRequestId = 0;
+
 async function loadFixedAllocation() {
+
     const requestId = ++snapshotRequestId;
+
     const account = selectedAccount;
+
     const currencyAtRequest = selectedCurrency;
+
     const etfsAtRequest = includeEtfs;
+
     try {
+
         // Dedicated current snapshot: never depend on chart period.
+
         const info = await fetchJson(`${SNAPSHOT_API}?account=${encodeURIComponent(account)}&currency=${selectedCurrency}&etfs=${includeEtfs ? "included" : "excluded"}`);
+
         if (requestId === snapshotRequestId && account === selectedAccount && currencyAtRequest === selectedCurrency && etfsAtRequest === includeEtfs) {
+
             updateAllocation(info);
+
             setAccountStatus(`Showing ${ACCOUNT_LABELS[account]} holdings`);
+
             const freshness = document.getElementById('publicDataFreshness');
+
             if (freshness) {
+
                 const dates = Object.values(info.positions_as_of || {}).filter(Boolean);
+
+                freshness.dataset.marketDataThrough = info.market_data_through || 'unavailable';
+
                 const positionsDate = dates.length ? dates.map(d=>String(d).slice(0,10)).join(' / ') : 'not available';
+
                 freshness.dataset.positionsDate = positionsDate;
+
                 const performanceDate = freshness.dataset.performanceDate;
+
                 const pending = performanceDate && dates.some(d=>String(d).slice(0,10)>performanceDate);
+
                 freshness.textContent = `Holdings snapshots: ${positionsDate} · Performance through: ${performanceDate || 'loading…'}.` + (pending ? ' Historical return update pending.' : ' Individual trades remain private.');
+
             }
+
         }
+
     } catch (error) {
+
         console.error("Could not load fixed allocation:", error);
+
         if (requestId === snapshotRequestId) {
+
             setAccountStatus(`Could not load ${ACCOUNT_LABELS[account]} holdings. Try Refresh data.`);
-            elements.holdingsBody.innerHTML = `<tr><td colspan="3" class="public-empty">Current holdings unavailable. Refresh to retry.</td></tr>`;
+
+            elements.holdingsBody.innerHTML = `<tr><td colspan="6" class="public-empty">Current holdings unavailable. Refresh to retry.</td></tr>`;
+
         }
+
     }
+
 }
+
+
 
 function initializeAnalytics() {
+
     initializePerformanceSelector();
+
     initializeGainersSelector();
+
     loadFixedAllocation();
+
     updatePerformance();
+
     updateGainers();
+
 }
+
 function initializePerformanceSelector() {
+
     selector("performancePeriods", PERFORMANCE_PERIODS, performancePeriod, period => {
+
         performancePeriod = period; initializePerformanceSelector(); updatePerformance();
+
     });
+
 }
+
 function initializeGainersSelector() {
+
     selector("gainerPeriods", GAINER_PERIODS, gainerPeriod, period => {
+
         gainerPeriod = period; initializeGainersSelector(); updateGainers();
+
     });
+
 }
+
 // Refresh also clears short-lived browser request memoization.
+
 elements.refreshButton.addEventListener("click", () => {
+
     if (!elements.tradeActivityPanel.hidden) window.loadPublicTradeActivity(selectedAccount);
+
     analyticsRequests.clear();
+
     loadFixedAllocation();
+
     updatePerformance();
+
     updateGainers();
+
 });
 
+
+
 function selectCurrency(currency) {
+
     if (!['USD','DKK'].includes(currency) || currency === selectedCurrency) return;
+
     selectedCurrency = currency;
+
     accountGeneration++;
+
     snapshotRequestId++;
+
     analyticsRequests.clear();
+
     for (const button of document.querySelectorAll('.currency-option')) {
+
         const active = button.dataset.currency === currency;
+
         button.classList.toggle('active', active);
+
         button.setAttribute('aria-pressed', String(active));
+
     }
+
     setAccountStatus(`Displaying ${ACCOUNT_LABELS[selectedAccount]} in ${currency}…`);
+
     loadFixedAllocation();
+
     updatePerformance();
+
     updateGainers();
+
 }
+
 for (const button of document.querySelectorAll('.currency-option')) {
+
     button.addEventListener('click', () => selectCurrency(button.dataset.currency));
+
 }
+
 function selectEtfs(value) {
+
     if (!["included", "excluded"].includes(value)) return;
+
     const next = value === "included";
+
     if (next === includeEtfs) return;
+
     includeEtfs = next;
+
     accountGeneration++;
+
     snapshotRequestId++;
+
     analyticsRequests.clear();
+
     for (const button of document.querySelectorAll(".etf-option")) {
+
         const active = button.dataset.etfs === value;
+
         button.classList.toggle("active", active);
+
         button.setAttribute("aria-pressed", String(active));
+
     }
+
     setAccountStatus(`Loading ${ACCOUNT_LABELS[selectedAccount]} · ETFs ${value}…`);
+
     loadFixedAllocation();
+
     updatePerformance();
+
     updateGainers();
+
 }
+
 for (const button of document.querySelectorAll(".etf-option")) {
+
     button.addEventListener("click", () => selectEtfs(button.dataset.etfs));
+
 }
+
+
 
 function selectAccount(account) {
+
     if (!['combined', 'us', 'dk'].includes(account) || selectedAccount === account) return;
+
     selectedAccount = account;
+
     setAccountStatus(`Loading ${ACCOUNT_LABELS[account]} holdings and performance…`);
+
     accountGeneration++;
+
     snapshotRequestId++;
+
     analyticsRequests.clear();
+
     for (const button of document.querySelectorAll('.account-option')) {
+
         const active = button.dataset.account === selectedAccount;
+
         button.classList.toggle('active', active);
+
         button.setAttribute('aria-pressed', String(active));
+
     }
+
     if (!elements.tradeActivityPanel.hidden) window.loadPublicTradeActivity(account);
+
     // Both charts get new account data, but their own period buttons remain independent.
+
     loadFixedAllocation();
+
     updatePerformance();
+
     updateGainers();
-}
-for (const button of document.querySelectorAll('.account-option')) {
-    button.addEventListener('click', () => selectAccount(button.dataset.account));
+
 }
 
+for (const button of document.querySelectorAll('.account-option')) {
+
+    button.addEventListener('click', () => selectAccount(button.dataset.account));
+
+}
+
+
+
 // Start charts after all analytics constants and functions are defined.
+
 initializeAnalytics();
+
+
+document.getElementById('watchlist-sort-public').addEventListener('change',()=>renderWatchlist(cachedWatchlist));
