@@ -8,17 +8,17 @@
         "value": 337.476
     },
     "DFEDTARL": {
-        "date": "2026-09-15",
-        "value": 3.5
-    },
-    "DFEDTARU": {
-        "date": "2026-09-15",
+        "date": "2026-10-28",
         "value": 3.75
     },
+    "DFEDTARU": {
+        "date": "2026-10-28",
+        "value": 4.0
+    },
     "FED_FUNDS_TARGET_RANGE": {
-        "date": "2026-09-15",
-        "lower": 3.5,
-        "upper": 3.75
+        "date": "2026-10-28",
+        "lower": 3.75,
+        "upper": 4.0
     },
     "ICSA": {
         "date": "2026-10-31",
