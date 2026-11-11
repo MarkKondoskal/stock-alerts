@@ -60,10 +60,21 @@ class ReviewFixes(unittest.TestCase):
             save.assert_not_called()
 
     def test_old_session_cannot_trigger_price_alert(self):
+        now = datetime(2026, 11, 11, 13, tzinfo=timezone.utc)
         ticker = Mock()
-        ticker.history.return_value = SimpleNamespace(empty=False,
-            index=[datetime.now(timezone.utc)-timedelta(days=1)])
-        self.assertEqual(stock_alert.session_prices(ticker), (None, None))
+        ticker.history.return_value = SimpleNamespace(
+            empty=False, index=[now - timedelta(days=1)]
+        )
+        ticker.get_history_metadata.return_value = {
+            'currentTradingPeriod': {
+                'regular': {
+                    'start': (now + timedelta(hours=1, minutes=30)).timestamp(),
+                    'end': (now + timedelta(hours=8)).timestamp(),
+                }
+            }
+        }
+
+        self.assertEqual(stock_alert.session_prices(ticker, now=now), (None, None))
 
     def test_ytd_uses_prior_year_close_not_download_buffer(self):
         year = date.today().year
