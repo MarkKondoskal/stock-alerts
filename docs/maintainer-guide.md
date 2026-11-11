@@ -291,7 +291,7 @@ Trade Manager can include recorded fees in position cost basis even though the h
 
 Performance Drivers inherits these limitations. Missing attribution intervals or a contribution total differing from the displayed return by more than 0.05 pp suppresses the chart until matching inputs are available. Displayed top/bottom bars are a subset of all contributors and need not sum to the total portfolio return.
 
-The price scanner requires a bar dated to the current exchange-local session. Missing current-session data fails conservatively for active price targets, including possible pre-market or holiday cases; an empty watchlist is a successful no-op. Exchange-calendar classification is not implemented.
+The price scanner requires a complete bar dated to the current exchange-local session. When that bar is unavailable and the provider confirms the market is outside regular hours, the scanner skips the price check and keeps the target. Missing quotes during regular hours or when session hours are unavailable fail the run. An empty watchlist completes successfully.
 
 ## Tests
 
@@ -320,7 +320,7 @@ Offline tests verify implementation behaviour; they do not prove live provider a
 | Performance Drivers is empty | Check attribution coverage, selected dates/currency/ETF mode, and the private performance workflow. Reconciliation failures are deliberately visible. |
 | Save reports a conflict | Reload the latest watchlist/account state and reapply the intended edit. |
 | No Discord alert | Check the target condition, source-data availability, webhook secret, workflow result, and private attempt history. |
-| Price-alert workflow fails before opening | No current-session bar may be available; inspect the log rather than assuming the target was checked. |
+| Price-alert workflow reports a missing or incomplete quote | Check the exchange-local quote date and whether the provider returned valid regular trading hours. Pending targets stay on the watchlist. |
 | Economic readings are cached or unavailable | Configure `FRED_API_KEY` separately for Render and Actions; inspect source/schedule warnings. |
 | Holdings update but history lags | Run the private **Daily Portfolio Performance** workflow, then prepare dashboards again. |
 | First page load is slow | Check service cold-start behaviour and whether usable prepared data is available. |
